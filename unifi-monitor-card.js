@@ -34,17 +34,19 @@ class UnifiMonitorCard extends HTMLElement {
   setConfig(config) {
     this.config = JSON.parse(JSON.stringify(config));
     if (!this.config.style) this.config.style = {};
-    if (!this.config.name_overrides) this.config.name_overrides = {};
     
+    // Fallback für Defaults
     const defaults = UnifiMonitorCard.getStubConfig().style;
     for (const key in defaults) {
       if (this.config.style[key] === undefined) this.config.style[key] = defaults[key];
     }
+    
+    // Sofortiges Re-Rendering bei Config-Änderung
+    this.render();
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this.content) this.render();
     this._discoveredDevices = this.discoverDevices();
     this.updateData();
   }
@@ -72,7 +74,9 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   render() {
+    if (!this.config) return;
     const s = this.config.style || {};
+    
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -81,19 +85,44 @@ class UnifiMonitorCard extends HTMLElement {
           --umc-offline: ${this.config.color_offline || '#f44336'};
         }
         .card-container { 
-          background: ${s.card_bg}; border-radius: ${s.card_border_radius}; 
-          padding: ${s.card_padding}; box-shadow: ${s.card_shadow};
-          font-family: var(--primary-font-family, inherit); color: var(--primary-text-color); 
+          background: ${s.card_bg}; 
+          border-radius: ${s.card_border_radius}; 
+          padding: ${s.card_padding}; 
+          box-shadow: ${s.card_shadow};
+          font-family: var(--primary-font-family, inherit); 
+          color: var(--primary-text-color); 
         }
-        .header { font-size: ${s.title_font_size}; color: ${s.title_color}; font-weight: bold; margin-bottom: 12px; }
+        .header { 
+          font-size: ${s.title_font_size}; 
+          color: ${s.title_color}; 
+          font-weight: bold; 
+          margin-bottom: 12px; 
+          display: ${this.config.title ? 'block' : 'none'};
+        }
         .device-row { 
-          display: grid; grid-template-columns: 40px 1fr auto; align-items: center; 
-          gap: 12px; padding: 12px; border-radius: 8px; background: ${s.device_bg}; margin-bottom: 8px; 
+          display: grid; 
+          grid-template-columns: 40px 1fr auto; 
+          align-items: center; 
+          gap: 12px; 
+          padding: 12px; 
+          border-radius: 8px; 
+          background: ${s.device_bg}; 
+          margin-bottom: 8px; 
         }
         .online { color: var(--umc-online); }
         .offline { color: var(--umc-offline); }
-        .device-name { font-weight: 600; font-size: ${s.device_name_size}; color: ${s.device_name_color}; cursor: pointer; }
-        .version-text { font-size: 10px; color: ${s.version_color}; margin-top: -2px; }
+        .device-name { 
+          font-weight: 600; 
+          font-size: ${s.device_name_size}; 
+          color: ${s.device_name_color}; 
+          cursor: pointer; 
+        }
+        .version-text { 
+          font-size: 10px; 
+          color: ${s.version_color}; 
+          margin-top: -2px; 
+          display: ${this.config.show_version !== false ? 'block' : 'none'};
+        }
         .update-badge { background: var(--umc-update-blue); color: white; font-size: 9px; padding: 2px 6px; border-radius: 10px; cursor: pointer; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(3, 169, 244, 0); } 100% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0); } }
         .stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
@@ -102,7 +131,7 @@ class UnifiMonitorCard extends HTMLElement {
         .btn-restart { background: transparent; border: none; color: var(--primary-text-color); cursor: pointer; opacity: 0.6; }
       </style>
       <div class="card-container">
-        ${this.config.title ? `<div class="header">${this.config.title}</div>` : ''}
+        <div class="header">${this.config.title || ''}</div>
         <div id="devices"></div>
       </div>
     `;
@@ -110,8 +139,8 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   updateData() {
+    if (!this.content || !this._discoveredDevices || !this._hass) return;
     let html = '';
-    if (!this._discoveredDevices) return;
     this._discoveredDevices.forEach(device => {
       const prefix = device.prefix;
       const displayName = this.config.name_overrides?.[prefix] || device.default_name;
@@ -133,7 +162,7 @@ class UnifiMonitorCard extends HTMLElement {
               <span class="device-name" onclick="this.getRootNode().host.openDetails('${prefix}')">${displayName}</span>
               ${hasUpdate ? `<span class="update-badge" onclick="this.getRootNode().host.triggerUpdate('${prefix}')">Update</span>` : ''}
             </div>
-            ${this.config.show_version ? `<span class="version-text">FW: ${version}</span>` : ''}
+            <span class="version-text">FW: ${version}</span>
             <div class="stat-row">
               <div class="bar-bg"><div class="bar-fill" style="width: ${cpuObj?.state || 0}%"></div></div>
               <span>CPU: ${cpuObj?.state || 0}%</span>
@@ -161,16 +190,12 @@ class UnifiMonitorCard extends HTMLElement {
   }
 }
 
-// --- STABILISIERTER EDITOR OHNE RE-RENDER LOOP ---
+// --- EDITOR ---
 class UnifiMonitorCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = JSON.parse(JSON.stringify(config));
-    // Wir rendern nur, wenn noch kein HTML da ist, um Akkordeon-Closes zu verhindern
-    if (!this.innerHTML) {
-      this.render();
-    } else {
-      this._updateElements();
-    }
+    this._config = config;
+    if (!this._config.style) this._config.style = {};
+    this.render();
   }
 
   set hass(hass) {
@@ -178,77 +203,59 @@ class UnifiMonitorCardEditor extends HTMLElement {
   }
 
   render() {
-    if (!this._config) return;
-    const style = this._config.style || {};
+    if (!this._config || !this._hass) return;
+    
+    // Wichtig: Wir bauen das HTML nur einmal, um Focus-Verlust zu vermeiden
+    if (!this.shadowRoot) {
+      this.attachShadow({ mode: 'open' });
+    }
 
-    this.innerHTML = `
+    this.shadowRoot.innerHTML = `
       <style>
-        details { border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 8px; background: var(--card-background-color); }
-        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; background: rgba(0,0,0,0.02); }
+        .container { display: flex; flex-direction: column; gap: 12px; font-family: sans-serif; }
+        details { border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); }
+        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; }
         .content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
         ha-textfield { width: 100%; }
-        .flex { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; }
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .flex { display: flex; justify-content: space-between; align-items: center; }
       </style>
 
-      <details open id="det_gen">
-        <summary>General Settings</summary>
-        <div class="content">
-          <ha-textfield label="Title" .value="${this._config.title || ''}" .configValue="title"></ha-textfield>
-          <div class="flex">
-            <span>Show Firmware Version</span>
-            <ha-switch id="sw_version" .checked="${this._config.show_version !== false}" .configValue="show_version"></ha-switch>
+      <div class="container">
+        <details open>
+          <summary>General</summary>
+          <div class="content">
+            <ha-textfield label="Title" .value="${this._config.title || ''}" .configValue="title"></ha-textfield>
+            <div class="flex">
+              <span>Show Firmware</span>
+              <ha-switch .checked="${this._config.show_version !== false}" .configValue="show_version"></ha-switch>
+            </div>
           </div>
-          <div class="flex">
-            <span>Auto Discover Devices</span>
-            <ha-switch id="sw_auto" .checked="${this._config.auto_discover !== false}" .configValue="auto_discover"></ha-switch>
-          </div>
-        </div>
-      </details>
+        </details>
 
-      <details id="det_style">
-        <summary>Card Styling</summary>
-        <div class="content">
-          <ha-textfield label="Background" .value="${style.card_bg || ''}" .configValue="style.card_bg"></ha-textfield>
-          <div class="grid">
-            <ha-textfield label="Padding" .value="${style.card_padding || ''}" .configValue="style.card_padding"></ha-textfield>
-            <ha-textfield label="Border Radius" .value="${style.card_border_radius || ''}" .configValue="style.card_border_radius"></ha-textfield>
+        <details>
+          <summary>Styling</summary>
+          <div class="content">
+            <ha-textfield label="Background" .value="${this._config.style.card_bg || ''}" .configValue="style.card_bg"></ha-textfield>
+            <ha-textfield label="Border Radius" .value="${this._config.style.card_border_radius || ''}" .configValue="style.card_border_radius"></ha-textfield>
+            <ha-textfield label="Padding" .value="${this._config.style.card_padding || ''}" .configValue="style.card_padding"></ha-textfield>
           </div>
-          <ha-textfield label="Box Shadow" .value="${style.card_shadow || ''}" .configValue="style.card_shadow"></ha-textfield>
-        </div>
-      </details>
+        </details>
 
-      <details id="det_alias">
-        <summary>Manual Name Aliases</summary>
-        <div class="content" id="alias_list">
-          ${this.getDeviceListHTML()}
-        </div>
-      </details>
+        <details>
+          <summary>Aliases</summary>
+          <div class="content">
+            ${this.getDeviceListHTML()}
+          </div>
+        </details>
+      </div>
     `;
 
-    this.querySelectorAll('ha-textfield, ha-switch').forEach(el => {
+    this.shadowRoot.querySelectorAll('ha-textfield, ha-switch').forEach(el => {
       el.addEventListener('change', (ev) => this._valueChanged(ev));
     });
   }
 
-  // Diese Funktion aktualisiert nur die Werte, ohne das HTML neu zu bauen
-  _updateElements() {
-    const style = this._config.style || {};
-    this.querySelectorAll('ha-textfield').forEach(el => {
-      if (el.configValue === 'title') el.value = this._config.title || '';
-      else if (el.configValue?.startsWith('style.')) {
-        const key = el.configValue.split('.')[1];
-        el.value = style[key] || '';
-      }
-    });
-    const swVersion = this.querySelector('#sw_version');
-    if (swVersion) swVersion.checked = this._config.show_version !== false;
-    const swAuto = this.querySelector('#sw_auto');
-    if (swAuto) swAuto.checked = this._config.auto_discover !== false;
-  }
-
   getDeviceListHTML() {
-    if (!this._hass) return '';
     const prefixes = new Set();
     for (const entityId in this._hass.states) {
       if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
@@ -262,6 +269,7 @@ class UnifiMonitorCardEditor extends HTMLElement {
   }
 
   _valueChanged(ev) {
+    if (!this._config) return;
     const target = ev.target;
     const configValue = target.configValue;
     const value = target.tagName === 'HA-SWITCH' ? target.checked : target.value;
@@ -271,17 +279,14 @@ class UnifiMonitorCardEditor extends HTMLElement {
     if (target.classList.contains('alias-input')) {
       const prefix = target.prefix;
       if (!newConfig.name_overrides) newConfig.name_overrides = {};
-      if (value === "") delete newConfig.name_overrides[prefix];
-      else newConfig.name_overrides[prefix] = value;
+      newConfig.name_overrides[prefix] = value;
     } else if (configValue && configValue.includes('.')) {
-      const [parent, child] = configValue.split('.');
-      if (!newConfig[parent]) newConfig[parent] = {};
-      newConfig[parent][child] = value;
-    } else if (configValue) {
+      const parts = configValue.split('.');
+      newConfig[parts[0]][parts[1]] = value;
+    } else {
       newConfig[configValue] = value;
     }
 
-    this._config = newConfig;
     this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
   }
 }
@@ -294,5 +299,5 @@ window.customCards.push({
   type: "unifi-monitor-card",
   name: "UniFi Monitor Pro",
   preview: true,
-  description: "Fixed Editor: No more auto-closing accordions or resetting switches."
+  description: "Advanced UniFi Monitoring with live styling."
 });
