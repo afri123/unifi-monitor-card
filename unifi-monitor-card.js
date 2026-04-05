@@ -2,13 +2,17 @@ class UnifiMonitorCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: 'open' });
+    this._discoveredDevices = null;
   }
 
   setConfig(config) {
-    if (!config.devices || !Array.isArray(config.devices)) {
-      throw new Error('Bitte definiere ein Array von "devices" (Geräte-Präfixe).');
-    }
-    this.config = config;
+    // Standardmäßig Auto-Discovery aktivieren, falls "devices" nicht manuell gesetzt wurde
+    this.config = {
+      title: 'Netzwerk Infrastruktur',
+      auto_discover: true,
+      devices: [],
+      ...config
+    };
   }
 
   set hass(hass) {
@@ -16,14 +20,59 @@ class UnifiMonitorCard extends HTMLElement {
     if (!this.content) {
       this.render();
     }
+    
+    // Führe Auto-Discovery nur einmalig aus, um Leistung zu sparen
+    if (this.config.auto_discover && !this._discoveredDevices) {
+      this._discoveredDevices = this.discoverDevices();
+    }
+
     this.updateData();
+  }
+
+  discoverDevices() {
+    const devices = [];
+    const prefixes = new Set();
+
+    // 1. Alle Entitäten durchsuchen, die auf _cpu_utilization enden
+    for (const entityId in this._hass.states) {
+      if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
+        // Extrahiere den Präfix (z.B. aus 'sensor.udm_se_cpu_utilization' wird 'udm_se')
+        const prefix = entityId.substring(7, entityId.length - 16);
+        prefixes.add(prefix);
+      }
+    }
+
+    // 2. Präfixe validieren und formatieren
+    prefixes.forEach(prefix => {
+      // Prüfen, ob es wirklich ein UniFi Netzwerkgerät ist (hat meistens auch Memory oder einen Restart-Button)
+      const hasMem = this._hass.states[`sensor.${prefix}_memory_utilization`];
+      const hasRestart = this._hass.states[`button.${prefix}_restart`];
+
+      if (hasMem || hasRestart) {
+        // Schönen Namen generieren (z.B. "udm_se" -> "Udm Se")
+        let name = prefix.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        
+        // Smartes Icon-Matching anhand des Namens
+        let icon = 'mdi:router-network';
+        if (prefix.includes('usw') || prefix.includes('switch')) icon = 'mdi:switch';
+        if (prefix.includes('u6') || prefix.includes('ap') || prefix.includes('wifi') || prefix.includes('flex')) icon = 'mdi:access-point';
+
+        devices.push({
+          prefix: prefix,
+          name: name,
+          icon: icon
+        });
+      }
+    });
+
+    // Alphabetisch nach Namen sortieren
+    return devices.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   render() {
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          /* Globale CSS Variablen für maximale Anpassbarkeit */
           --umc-bg: var(--ha-card-background, var(--card-background-color, white));
           --umc-border-radius: var(--ha-card-border-radius, 12px);
           --umc-shadow: var(--ha-card-box-shadow, 0px 2px 4px 0px rgba(0,0,0,0.16));
@@ -67,9 +116,7 @@ class UnifiMonitorCard extends HTMLElement {
           transition: background 0.2s;
         }
 
-        .device-row:hover {
-          background: rgba(150,150,150, 0.1);
-        }
+        .device-row:hover { background: rgba(150,150,150, 0.1); }
 
         .icon-wrapper ha-icon {
           color: var(--umc-icon-color);
@@ -146,6 +193,13 @@ class UnifiMonitorCard extends HTMLElement {
           color: var(--umc-bar-ram);
           border-color: var(--umc-bar-ram);
         }
+        
+        .empty-state {
+          text-align: center;
+          padding: 20px;
+          color: var(--umc-subtext-color);
+          font-style: italic;
+        }
       </style>
       
       <div class="card-container">
@@ -158,29 +212,34 @@ class UnifiMonitorCard extends HTMLElement {
 
   updateData() {
     let html = '';
+    
+    // Nutze entweder die manuell definierten Geräte oder die automatisch gefundenen
+    const activeDevices = (this.config.devices && this.config.devices.length > 0) 
+                            ? this.config.devices 
+                            : this._discoveredDevices;
 
-    this.config.devices.forEach(device => {
-      // Präfixe aus der Konfiguration
+    if (!activeDevices || activeDevices.length === 0) {
+      this.content.innerHTML = '<div class="empty-state">Keine UniFi-Geräte gefunden.</div>';
+      return;
+    }
+
+    activeDevices.forEach(device => {
       const prefix = device.prefix;
       const name = device.name || prefix.replace(/_/g, ' ').toUpperCase();
       const icon = device.icon || 'mdi:router-network';
 
-      // Entitäten dynamisch abgreifen
       const stateObj = this._hass.states[`sensor.${prefix}_state`] || this._hass.states[`device_tracker.${prefix}`];
       const cpuObj = this._hass.states[`sensor.${prefix}_cpu_utilization`];
       const ramObj = this._hass.states[`sensor.${prefix}_memory_utilization`];
       const tempObj = this._hass.states[`sensor.${prefix}_temperature`] || this._hass.states[`sensor.${prefix}_cpu_temperature`];
       const updateObj = this._hass.states[`update.${prefix}`];
 
-      // Status
       const status = stateObj ? stateObj.state.toLowerCase() : 'unknown';
       const statusClass = (status === 'connected' || status === 'home' || status === 'online') ? 'online' : (status === 'unknown' ? '' : 'offline');
 
-      // Werte
       const cpu = cpuObj ? parseFloat(cpuObj.state) : null;
       const ram = ramObj ? parseFloat(ramObj.state) : null;
       const temp = tempObj ? parseFloat(tempObj.state) : null;
-      
       const hasUpdate = updateObj && updateObj.state === 'on';
 
       html += `
@@ -192,21 +251,21 @@ class UnifiMonitorCard extends HTMLElement {
           <div class="info-col">
             <div class="device-name">${name}</div>
             <div class="stats-container">
-              ${cpu !== null ? `
+              ${cpu !== null && !isNaN(cpu) ? `
                 <div class="stat-row">
                   <span class="stat-label">CPU:</span>
                   <div class="bar-bg"><div class="bar-fill cpu" style="width: ${cpu}%"></div></div>
                   <span>${cpu}%</span>
                 </div>
               ` : ''}
-              ${ram !== null ? `
+              ${ram !== null && !isNaN(ram) ? `
                 <div class="stat-row">
                   <span class="stat-label">RAM:</span>
                   <div class="bar-bg"><div class="bar-fill ram" style="width: ${ram}%"></div></div>
                   <span>${ram}%</span>
                 </div>
               ` : ''}
-              ${temp !== null ? `
+              ${temp !== null && !isNaN(temp) ? `
                 <div class="stat-row">
                   <span class="stat-label">Temp:</span>
                   <span>${temp}°C</span>
@@ -221,9 +280,11 @@ class UnifiMonitorCard extends HTMLElement {
                 <ha-icon icon="mdi:cellphone-arrow-down" style="--mdc-icon-size: 14px;"></ha-icon> Update
               </button>
             ` : ''}
+            ${this._hass.states[`button.${prefix}_restart`] ? `
             <button class="btn" onclick="this.getRootNode().host.triggerRestart('${prefix}')">
               <ha-icon icon="mdi:restart" style="--mdc-icon-size: 14px;"></ha-icon>
             </button>
+            ` : ''}
           </div>
         </div>
       `;
@@ -232,7 +293,6 @@ class UnifiMonitorCard extends HTMLElement {
     this.content.innerHTML = html;
   }
 
-  // --- Aktionen an Home Assistant senden ---
   triggerRestart(prefix) {
     if(confirm('Gerät wirklich neu starten?')) {
       this._hass.callService('button', 'press', { entity_id: `button.${prefix}_restart` });
@@ -246,16 +306,8 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   getCardSize() {
-    return this.config.devices ? this.config.devices.length + 1 : 1;
+    return this._discoveredDevices ? this._discoveredDevices.length + 1 : 2;
   }
 }
 
 customElements.define('unifi-monitor-card', UnifiMonitorCard);
-// Füge die Karte dem visuellen Editor hinzu
-window.customCards = window.customCards || [];
-window.customCards.push({
-  type: "unifi-monitor-card",
-  name: "UniFi Monitor",
-  preview: true,
-  description: "Eine stark anpassbare Dashboard-Karte für UniFi Geräte."
-});
