@@ -1,0 +1,6 @@
+{
+  "name": "UniFi Monitor Card",
+  "render_readme": true,
+  "filename": "unifi-monitor-card.js",
+  "hacs": "1.0.0"
+}
