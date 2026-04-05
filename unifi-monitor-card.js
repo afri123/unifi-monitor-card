@@ -311,3 +311,12 @@ class UnifiMonitorCard extends HTMLElement {
 }
 
 customElements.define('unifi-monitor-card', UnifiMonitorCard);
+
+// Dieser Block sorgt dafür, dass die Karte im visuellen Editor auftaucht:
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "unifi-monitor-card",
+  name: "UniFi Monitor",
+  preview: true,
+  description: "Eine stark anpassbare Dashboard-Karte für UniFi Geräte."
+});
