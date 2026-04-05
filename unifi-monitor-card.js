@@ -14,7 +14,20 @@ class UnifiMonitorCard extends HTMLElement {
       title: "UniFi Network", 
       auto_discover: true, 
       show_version: true,
-      name_overrides: {} 
+      name_overrides: {},
+      style: {
+        card_bg: "var(--ha-card-background, var(--card-background-color, white))",
+        card_padding: "16px",
+        card_border_radius: "12px",
+        card_shadow: "var(--ha-card-box-shadow, none)",
+        title_font_size: "1.2rem",
+        title_color: "var(--primary-text-color)",
+        device_bg: "rgba(150,150,150, 0.05)",
+        device_name_size: "14px",
+        device_name_color: "var(--primary-text-color)",
+        version_color: "var(--secondary-text-color)",
+        bar_height: "4px"
+      }
     };
   }
 
@@ -24,20 +37,17 @@ class UnifiMonitorCard extends HTMLElement {
       auto_discover: true,
       show_version: true,
       name_overrides: {},
+      style: { ...UnifiMonitorCard.getStubConfig().style, ...(config.style || {}) },
       ...config
     };
   }
 
   set hass(hass) {
     this._hass = hass;
-    if (!this.content) {
-      this.render();
-    }
-    
+    if (!this.content) this.render();
     if (this.config.auto_discover && !this._discoveredDevices) {
       this._discoveredDevices = this.discoverDevices();
     }
-
     this.updateData();
   }
 
@@ -54,40 +64,61 @@ class UnifiMonitorCard extends HTMLElement {
       let name = prefix.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
       let icon = 'mdi:router-network';
       if (prefix.includes('usw') || prefix.includes('switch')) icon = 'mdi:switch';
-      if (prefix.includes('u6') || prefix.includes('ap') || prefix.includes('wifi')) icon = 'mdi:access-point';
+      if (prefix.includes('u6') || prefix.includes('ap') || prefix.includes('wifi') || prefix.includes('iw')) icon = 'mdi:access-point';
       devices.push({ prefix: prefix, default_name: name, icon: icon });
     });
     return devices.sort((a, b) => a.default_name.localeCompare(b.default_name));
   }
 
   render() {
+    const s = this.config.style;
     this.shadowRoot.innerHTML = `
       <style>
         :host {
-          --umc-bg: ${this.config.color_bg || 'var(--ha-card-background, var(--card-background-color, white))'};
-          --umc-border-radius: ${this.config.border_radius || 'var(--ha-card-border-radius, 12px)'};
-          --umc-icon-online: ${this.config.color_online || '#4caf50'};
-          --umc-icon-offline: ${this.config.color_offline || '#f44336'};
           --umc-update-blue: #03a9f4;
+          --umc-online: ${this.config.color_online || '#4caf50'};
+          --umc-offline: ${this.config.color_offline || '#f44336'};
         }
-        .card-container { background: var(--umc-bg); border-radius: var(--umc-border-radius); padding: 16px; font-family: var(--primary-font-family, inherit); color: var(--primary-text-color); box-shadow: var(--ha-card-box-shadow, none); }
-        .header { font-size: 1.2rem; font-weight: bold; margin-bottom: 12px; }
-        .device-row { display: grid; grid-template-columns: 40px 1fr auto; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: rgba(150,150,150, 0.05); margin-bottom: 8px; }
-        .icon-wrapper ha-icon { --mdc-icon-size: 26px; }
-        .online { color: var(--umc-icon-online); }
-        .offline { color: var(--umc-icon-offline); }
-        .info-col { display: flex; flex-direction: column; }
-        .name-row { display: flex; align-items: center; gap: 8px; }
-        .device-name { font-weight: 600; font-size: 14px; cursor: pointer; }
-        .device-name:hover { text-decoration: underline; color: var(--primary-color); }
-        .version-text { font-size: 10px; color: var(--secondary-text-color); margin-top: -2px; }
-        .update-badge { background: var(--umc-update-blue); color: white; font-size: 9px; padding: 2px 6px; border-radius: 10px; cursor: pointer; font-weight: bold; text-transform: uppercase; animation: pulse 2s infinite; }
+        .card-container { 
+          background: ${s.card_bg}; 
+          border-radius: ${s.card_border_radius}; 
+          padding: ${s.card_padding}; 
+          box-shadow: ${s.card_shadow};
+          font-family: var(--primary-font-family, inherit); 
+          color: var(--primary-text-color); 
+        }
+        .header { 
+          font-size: ${s.title_font_size}; 
+          color: ${s.title_color};
+          font-weight: bold; 
+          margin-bottom: 12px; 
+        }
+        .device-row { 
+          display: grid; 
+          grid-template-columns: 40px 1fr auto; 
+          align-items: center; 
+          gap: 12px; 
+          padding: 12px; 
+          border-radius: 8px; 
+          background: ${s.device_bg}; 
+          margin-bottom: 8px; 
+        }
+        .online { color: var(--umc-online); }
+        .offline { color: var(--umc-offline); }
+        .device-name { 
+          font-weight: 600; 
+          font-size: ${s.device_name_size}; 
+          color: ${s.device_name_color};
+          cursor: pointer; 
+        }
+        .version-text { font-size: 10px; color: ${s.version_color}; margin-top: -2px; }
+        .update-badge { background: var(--umc-update-blue); color: white; font-size: 9px; padding: 2px 6px; border-radius: 10px; cursor: pointer; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(3, 169, 244, 0); } 100% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0); } }
-        .stats-container { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--secondary-text-color); margin-top: 6px; }
-        .stat-row { display: flex; align-items: center; gap: 8px; }
-        .bar-bg { flex-grow: 1; height: 4px; background: rgba(150,150,150, 0.2); border-radius: 2px; overflow: hidden; }
+        .stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
+        .bar-bg { flex-grow: 1; height: ${s.bar_height}; background: rgba(150,150,150, 0.2); border-radius: 2px; overflow: hidden; }
         .bar-fill { height: 100%; transition: width 0.5s; background: var(--primary-color); }
-        .btn-restart { background: transparent; border: 1px solid rgba(150,150,150,0.2); color: var(--primary-text-color); padding: 4px; border-radius: 4px; cursor: pointer; }
+        .btn-restart { background: transparent; border: none; color: var(--primary-text-color); cursor: pointer; opacity: 0.6; }
+        .btn-restart:hover { opacity: 1; }
       </style>
       <div class="card-container">
         ${this.config.title ? `<div class="header">${this.config.title}</div>` : ''}
@@ -105,16 +136,14 @@ class UnifiMonitorCard extends HTMLElement {
     activeDevices.forEach(device => {
       const prefix = device.prefix;
       const displayName = this.config.name_overrides?.[prefix] || device.name || device.default_name;
-      
       const cpuObj = this._hass.states[`sensor.${prefix}_cpu_utilization`];
       const ramObj = this._hass.states[`sensor.${prefix}_memory_utilization`];
       const stateObj = this._hass.states[`sensor.${prefix}_state`];
-      const versionObj = this._hass.states[`sensor.${prefix}_version`];
       const updateObj = this._hass.states[`update.${prefix}`];
 
-      const isOnline = stateObj && (stateObj.state === 'connected' || stateObj.state === 'online');
+      const isOnline = stateObj && (stateObj.state === 'connected' || stateObj.state === 'online' || stateObj.state === 'home');
       const hasUpdate = updateObj && updateObj.state === 'on';
-      const version = versionObj ? versionObj.state : 'Unknown';
+      const version = updateObj?.attributes?.installed_version || 'Unknown';
 
       html += `
         <div class="device-row">
@@ -122,24 +151,18 @@ class UnifiMonitorCard extends HTMLElement {
             <ha-icon icon="${device.icon || 'mdi:router-network'}"></ha-icon>
           </div>
           <div class="info-col">
-            <div class="name-row">
+            <div style="display:flex; align-items:center; gap:8px;">
               <span class="device-name" onclick="this.getRootNode().host.openDetails('${prefix}')">${displayName}</span>
               ${hasUpdate ? `<span class="update-badge" onclick="this.getRootNode().host.triggerUpdate('${prefix}')">Update</span>` : ''}
             </div>
-            ${this.config.show_version ? `<span class="version-text">v${version}</span>` : ''}
-            <div class="stats-container">
-              <div class="stat-row">
-                <div class="bar-bg"><div class="bar-fill" style="width: ${cpuObj ? cpuObj.state : 0}%"></div></div>
-                <span>CPU: ${cpuObj ? cpuObj.state : 0}%</span>
-              </div>
-              <div class="stat-row">
-                <div class="bar-bg"><div class="bar-fill" style="width: ${ramObj ? ramObj.state : 0}%; background: var(--accent-color);"></div></div>
-                <span>RAM: ${ramObj ? ramObj.state : 0}%</span>
-              </div>
+            ${this.config.show_version ? `<span class="version-text">FW: ${version}</span>` : ''}
+            <div class="stat-row">
+              <div class="bar-bg"><div class="bar-fill" style="width: ${cpuObj?.state || 0}%"></div></div>
+              <span>CPU: ${cpuObj?.state || 0}%</span>
             </div>
           </div>
           <button class="btn-restart" onclick="this.getRootNode().host.triggerRestart('${prefix}')">
-            <ha-icon icon="mdi:restart" style="--mdc-icon-size: 18px;"></ha-icon>
+            <ha-icon icon="mdi:restart"></ha-icon>
           </button>
         </div>
       `;
@@ -148,30 +171,20 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   openDetails(prefix) {
-    const entityId = `sensor.${prefix}_cpu_utilization`;
-    const event = new CustomEvent("hass-more-info", {
-      detail: { entityId },
-      bubbles: true,
-      composed: true,
-    });
-    this.dispatchEvent(event);
+    this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: `sensor.${prefix}_cpu_utilization` }, bubbles: true, composed: true }));
   }
 
   triggerRestart(prefix) {
-    if(confirm(`Gerät ${prefix} wirklich neu starten?`)) {
-      this._hass.callService('button', 'press', { entity_id: `button.${prefix}_restart` });
-    }
+    if(confirm(`Gerät ${prefix} neu starten?`)) this._hass.callService('button', 'press', { entity_id: `button.${prefix}_restart` });
   }
 
   triggerUpdate(prefix) {
-    if(confirm(`Firmware-Update für ${prefix} jetzt installieren?`)) {
-      this._hass.callService('update', 'install', { entity_id: `update.${prefix}` });
-    }
+    if(confirm(`Update für ${prefix} installieren?`)) this._hass.callService('update', 'install', { entity_id: `update.${prefix}` });
   }
 }
 
 // -------------------------------------------------------------
-// EDITOR MIT AKKORDEON FÜR NAMEN
+// EDITOR MIT MEHREREN AKKORDEONS (Kategorien)
 // -------------------------------------------------------------
 class UnifiMonitorCardEditor extends HTMLElement {
   setConfig(config) {
@@ -179,96 +192,115 @@ class UnifiMonitorCardEditor extends HTMLElement {
     this.render();
   }
 
-  set hass(hass) {
-    this._hass = hass;
-  }
+  set hass(hass) { this._hass = hass; }
 
   render() {
     if (!this._config || !this._hass) return;
 
     this.innerHTML = `
       <style>
-        .section { margin-bottom: 16px; border: 1px solid var(--divider-color); border-radius: 4px; padding: 12px; }
-        .section-title { font-weight: bold; margin-bottom: 8px; display: block; color: var(--secondary-text-color); text-transform: uppercase; font-size: 12px; }
-        details { border: 1px solid var(--divider-color); border-radius: 4px; padding: 8px; margin-top: 10px; }
-        summary { cursor: pointer; font-weight: bold; padding: 4px; outline: none; }
-        .name-edit-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
-        ha-textfield { width: 100%; }
-        ha-switch { margin-bottom: 8px; }
-        .flex-between { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+        details { border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 8px; background: var(--card-background-color); }
+        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; transition: background 0.2s; border-radius: 8px; }
+        summary:hover { background: rgba(0,0,0,0.05); }
+        .content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        ha-textfield, ha-select { width: 100%; }
       </style>
 
-      <div class="section">
-        <ha-textfield label="Kartentitel" .value="${this._config.title}" .configValue="${"title"}"></ha-textfield>
-        
-        <div class="flex-between" style="margin-top: 12px;">
-          <span>Firmware-Version anzeigen</span>
-          <ha-switch .checked="${this._config.show_version !== false}" .configValue="${"show_version"}"></ha-switch>
-        </div>
-
-        <div class="flex-between">
-          <span>Automatische Gerätesuche</span>
-          <ha-switch .checked="${this._config.auto_discover !== false}" .configValue="${"auto_discover"}"></ha-switch>
-        </div>
-
-        <details>
-          <summary>Gerätenamen anpassen (Alias)</summary>
-          <div id="name-editor-list" style="padding-top: 10px;">
-            ${this.getDeviceListHTML()}
+      <details open>
+        <summary>General Settings</summary>
+        <div class="content">
+          <ha-textfield label="Card Title" .value="${this._config.title}" .configValue="${"title"}"></ha-textfield>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Auto Discover</span>
+            <ha-switch .checked="${this._config.auto_discover}" .configValue="${"auto_discover"}"></ha-switch>
           </div>
-        </details>
-      </div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span>Show Firmware Version</span>
+            <ha-switch .checked="${this._config.show_version}" .configValue="${"show_version"}"></ha-switch>
+          </div>
+        </div>
+      </details>
+
+      <details>
+        <summary>Card Styling (Container)</summary>
+        <div class="content">
+          <ha-textfield label="Background (CSS)" .value="${this._config.style.card_bg}" .configValue="${"style.card_bg"}"></ha-textfield>
+          <div class="grid">
+            <ha-textfield label="Padding" .value="${this._config.style.card_padding}" .configValue="${"style.card_padding"}"></ha-textfield>
+            <ha-textfield label="Border Radius" .value="${this._config.style.card_border_radius}" .configValue="${"style.card_border_radius"}"></ha-textfield>
+          </div>
+          <ha-textfield label="Box Shadow" .value="${this._config.style.card_shadow}" .configValue="${"style.card_shadow"}"></ha-textfield>
+        </div>
+      </details>
+
+      <details>
+        <summary>Typography & Colors</summary>
+        <div class="content">
+          <div class="grid">
+            <ha-textfield label="Title Size" .value="${this._config.style.title_font_size}" .configValue="${"style.title_font_size"}"></ha-textfield>
+            <ha-textfield label="Title Color" .value="${this._config.style.title_color}" .configValue="${"style.title_color"}"></ha-textfield>
+          </div>
+          <div class="grid">
+            <ha-textfield label="Device Name Size" .value="${this._config.style.device_name_size}" .configValue="${"style.device_name_size"}"></ha-textfield>
+            <ha-textfield label="Name Color" .value="${this._config.style.device_name_color}" .configValue="${"style.device_name_color"}"></ha-textfield>
+          </div>
+          <ha-textfield label="Firmware Text Color" .value="${this._config.style.version_color}" .configValue="${"style.version_color"}"></ha-textfield>
+        </div>
+      </details>
+
+      <details>
+        <summary>Device Rows & Elements</summary>
+        <div class="content">
+          <ha-textfield label="Row Background" .value="${this._config.style.device_bg}" .configValue="${"style.device_bg"}"></ha-textfield>
+          <ha-textfield label="Bar Height" .value="${this._config.style.bar_height}" .configValue="${"style.bar_height"}"></ha-textfield>
+        </div>
+      </details>
+
+      <details>
+        <summary>Device Name Aliases (Manual Naming)</summary>
+        <div class="content">
+          ${this.getDeviceListHTML()}
+        </div>
+      </details>
     `;
 
     this.querySelectorAll('ha-textfield, ha-switch').forEach(el => {
       el.addEventListener('change', (ev) => this._valueChanged(ev));
     });
-
-    this.querySelectorAll('.name-override-input').forEach(el => {
-      el.addEventListener('input', (ev) => this._handleNameOverride(ev));
-    });
   }
 
   getDeviceListHTML() {
-    // Liste der verfügbaren Geräte generieren
     const prefixes = new Set();
     for (const entityId in this._hass.states) {
       if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
         prefixes.add(entityId.substring(7, entityId.length - 16));
       }
     }
-
     return Array.from(prefixes).map(prefix => `
-      <div class="name-edit-row">
-        <ha-textfield 
-          label="${prefix}" 
-          .value="${this._config.name_overrides?.[prefix] || ''}" 
-          .prefix="${prefix}"
-          class="name-override-input"
-        ></ha-textfield>
-      </div>
+      <ha-textfield label="Alias for ${prefix}" .value="${this._config.name_overrides?.[prefix] || ''}" .prefix="${prefix}" class="alias-input"></ha-textfield>
     `).join('');
   }
 
-  _handleNameOverride(ev) {
-    const prefix = ev.target.prefix;
-    const value = ev.target.value;
-    const name_overrides = { ...this._config.name_overrides, [prefix]: value };
-    
-    this._dispatchEvent({ ...this._config, name_overrides });
-  }
-
   _valueChanged(ev) {
+    const configValue = ev.target.configValue;
     const value = ev.target.tagName === 'HA-SWITCH' ? ev.target.checked : ev.target.value;
-    this._dispatchEvent({ ...this._config, [ev.target.configValue]: value });
-  }
 
-  _dispatchEvent(config) {
-    this.dispatchEvent(new CustomEvent("config-changed", {
-      detail: { config },
-      bubbles: true,
-      composed: true,
-    }));
+    let newConfig = JSON.parse(JSON.stringify(this._config));
+
+    if (configValue.startsWith('style.')) {
+      const key = configValue.split('.')[1];
+      newConfig.style[key] = value;
+    } else {
+      newConfig[configValue] = value;
+    }
+
+    if (ev.target.classList.contains('alias-input')) {
+      if (!newConfig.name_overrides) newConfig.name_overrides = {};
+      newConfig.name_overrides[ev.target.prefix] = value;
+    }
+
+    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
   }
 }
 
@@ -278,7 +310,7 @@ customElements.define('unifi-monitor-card-editor', UnifiMonitorCardEditor);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "unifi-monitor-card",
-  name: "UniFi Monitor",
+  name: "UniFi Monitor Pro",
   preview: true,
-  description: "Automatisierter UniFi Infrastruktur-Monitor mit Firmware-Steuerung."
+  description: "Advanced UniFi Monitoring with full styling support."
 });
