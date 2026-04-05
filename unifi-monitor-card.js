@@ -38,9 +38,7 @@ class UnifiMonitorCard extends HTMLElement {
     
     const defaults = UnifiMonitorCard.getStubConfig().style;
     for (const key in defaults) {
-      if (this.config.style[key] === undefined) {
-        this.config.style[key] = defaults[key];
-      }
+      if (this.config.style[key] === undefined) this.config.style[key] = defaults[key];
     }
   }
 
@@ -163,24 +161,29 @@ class UnifiMonitorCard extends HTMLElement {
   }
 }
 
-// --- STABILISIERTER EDITOR ---
+// --- STABILISIERTER EDITOR OHNE RE-RENDER LOOP ---
 class UnifiMonitorCardEditor extends HTMLElement {
   setConfig(config) {
     this._config = JSON.parse(JSON.stringify(config));
+    // Wir rendern nur, wenn noch kein HTML da ist, um Akkordeon-Closes zu verhindern
+    if (!this.innerHTML) {
+      this.render();
+    } else {
+      this._updateElements();
+    }
   }
 
   set hass(hass) {
     this._hass = hass;
-    this.render();
   }
 
   render() {
-    if (!this._config || !this._hass) return;
+    if (!this._config) return;
     const style = this._config.style || {};
 
     this.innerHTML = `
       <style>
-        details { border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 8px; background: var(--card-background-color); overflow: hidden; }
+        details { border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 8px; background: var(--card-background-color); }
         summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; background: rgba(0,0,0,0.02); }
         .content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
         ha-textfield { width: 100%; }
@@ -188,67 +191,64 @@ class UnifiMonitorCardEditor extends HTMLElement {
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       </style>
 
-      <details open>
+      <details open id="det_gen">
         <summary>General Settings</summary>
         <div class="content">
           <ha-textfield label="Title" .value="${this._config.title || ''}" .configValue="title"></ha-textfield>
           <div class="flex">
             <span>Show Firmware Version</span>
-            <ha-switch .checked="${this._config.show_version !== false}" .configValue="show_version"></ha-switch>
+            <ha-switch id="sw_version" .checked="${this._config.show_version !== false}" .configValue="show_version"></ha-switch>
           </div>
           <div class="flex">
             <span>Auto Discover Devices</span>
-            <ha-switch .checked="${this._config.auto_discover !== false}" .configValue="auto_discover"></ha-switch>
+            <ha-switch id="sw_auto" .checked="${this._config.auto_discover !== false}" .configValue="auto_discover"></ha-switch>
           </div>
         </div>
       </details>
 
-      <details>
+      <details id="det_style">
         <summary>Card Styling</summary>
         <div class="content">
-          <ha-textfield label="Background Color / Gradient" .value="${style.card_bg || ''}" .configValue="style.card_bg"></ha-textfield>
+          <ha-textfield label="Background" .value="${style.card_bg || ''}" .configValue="style.card_bg"></ha-textfield>
           <div class="grid">
             <ha-textfield label="Padding" .value="${style.card_padding || ''}" .configValue="style.card_padding"></ha-textfield>
             <ha-textfield label="Border Radius" .value="${style.card_border_radius || ''}" .configValue="style.card_border_radius"></ha-textfield>
           </div>
           <ha-textfield label="Box Shadow" .value="${style.card_shadow || ''}" .configValue="style.card_shadow"></ha-textfield>
-          <div class="grid">
-             <ha-textfield label="Title Size" .value="${style.title_font_size || ''}" .configValue="style.title_font_size"></ha-textfield>
-             <ha-textfield label="Title Color" .value="${style.title_color || ''}" .configValue="style.title_color"></ha-textfield>
-          </div>
         </div>
       </details>
 
-      <details>
-        <summary>Device Customization</summary>
-        <div class="content">
-          <ha-textfield label="Device Row Background" .value="${style.device_bg || ''}" .configValue="style.device_bg"></ha-textfield>
-          <div class="grid">
-            <ha-textfield label="Name Size" .value="${style.device_name_size || ''}" .configValue="style.device_name_size"></ha-textfield>
-            <ha-textfield label="Name Color" .value="${style.device_name_color || ''}" .configValue="style.device_name_color"></ha-textfield>
-          </div>
-          <ha-textfield label="Bar Height" .value="${style.bar_height || ''}" .configValue="style.bar_height"></ha-textfield>
-        </div>
-      </details>
-
-      <details>
+      <details id="det_alias">
         <summary>Manual Name Aliases</summary>
-        <div class="content">
+        <div class="content" id="alias_list">
           ${this.getDeviceListHTML()}
         </div>
       </details>
     `;
 
-    // Event Listener binden
-    this.querySelectorAll('ha-textfield').forEach(el => {
-      el.addEventListener('change', (ev) => this._valueChanged(ev));
-    });
-    this.querySelectorAll('ha-switch').forEach(el => {
+    this.querySelectorAll('ha-textfield, ha-switch').forEach(el => {
       el.addEventListener('change', (ev) => this._valueChanged(ev));
     });
   }
 
+  // Diese Funktion aktualisiert nur die Werte, ohne das HTML neu zu bauen
+  _updateElements() {
+    const style = this._config.style || {};
+    this.querySelectorAll('ha-textfield').forEach(el => {
+      if (el.configValue === 'title') el.value = this._config.title || '';
+      else if (el.configValue?.startsWith('style.')) {
+        const key = el.configValue.split('.')[1];
+        el.value = style[key] || '';
+      }
+    });
+    const swVersion = this.querySelector('#sw_version');
+    if (swVersion) swVersion.checked = this._config.show_version !== false;
+    const swAuto = this.querySelector('#sw_auto');
+    if (swAuto) swAuto.checked = this._config.auto_discover !== false;
+  }
+
   getDeviceListHTML() {
+    if (!this._hass) return '';
     const prefixes = new Set();
     for (const entityId in this._hass.states) {
       if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
@@ -262,7 +262,6 @@ class UnifiMonitorCardEditor extends HTMLElement {
   }
 
   _valueChanged(ev) {
-    if (!this._config || !this._hass) return;
     const target = ev.target;
     const configValue = target.configValue;
     const value = target.tagName === 'HA-SWITCH' ? target.checked : target.value;
@@ -274,11 +273,11 @@ class UnifiMonitorCardEditor extends HTMLElement {
       if (!newConfig.name_overrides) newConfig.name_overrides = {};
       if (value === "") delete newConfig.name_overrides[prefix];
       else newConfig.name_overrides[prefix] = value;
-    } else if (configValue.includes('.')) {
+    } else if (configValue && configValue.includes('.')) {
       const [parent, child] = configValue.split('.');
       if (!newConfig[parent]) newConfig[parent] = {};
       newConfig[parent][child] = value;
-    } else {
+    } else if (configValue) {
       newConfig[configValue] = value;
     }
 
@@ -295,5 +294,5 @@ window.customCards.push({
   type: "unifi-monitor-card",
   name: "UniFi Monitor Pro",
   preview: true,
-  description: "Advanced UniFi Monitoring with persistent editor state."
+  description: "Fixed Editor: No more auto-closing accordions or resetting switches."
 });
