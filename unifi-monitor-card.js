@@ -32,13 +32,17 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   setConfig(config) {
+    // Sicherstellen, dass 'style' und 'name_overrides' immer existieren
     this.config = {
       title: 'UniFi Network',
       auto_discover: true,
       show_version: true,
-      name_overrides: {},
-      style: { ...UnifiMonitorCard.getStubConfig().style, ...(config.style || {}) },
-      ...config
+      name_overrides: config.name_overrides || {},
+      ...config,
+      style: { 
+        ...(UnifiMonitorCard.getStubConfig().style), 
+        ...(config.style || {}) 
+      }
     };
   }
 
@@ -53,6 +57,7 @@ class UnifiMonitorCard extends HTMLElement {
 
   discoverDevices() {
     const devices = [];
+    if (!this._hass) return devices;
     const prefixes = new Set();
     for (const entityId in this._hass.states) {
       if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
@@ -71,7 +76,7 @@ class UnifiMonitorCard extends HTMLElement {
   }
 
   render() {
-    const s = this.config.style;
+    const s = this.config.style || {};
     this.shadowRoot.innerHTML = `
       <style>
         :host {
@@ -80,16 +85,16 @@ class UnifiMonitorCard extends HTMLElement {
           --umc-offline: ${this.config.color_offline || '#f44336'};
         }
         .card-container { 
-          background: ${s.card_bg}; 
-          border-radius: ${s.card_border_radius}; 
-          padding: ${s.card_padding}; 
-          box-shadow: ${s.card_shadow};
+          background: ${s.card_bg || 'inherit'}; 
+          border-radius: ${s.card_border_radius || '12px'}; 
+          padding: ${s.card_padding || '16px'}; 
+          box-shadow: ${s.card_shadow || 'none'};
           font-family: var(--primary-font-family, inherit); 
           color: var(--primary-text-color); 
         }
         .header { 
-          font-size: ${s.title_font_size}; 
-          color: ${s.title_color};
+          font-size: ${s.title_font_size || '1.2rem'}; 
+          color: ${s.title_color || 'inherit'};
           font-weight: bold; 
           margin-bottom: 12px; 
         }
@@ -100,25 +105,24 @@ class UnifiMonitorCard extends HTMLElement {
           gap: 12px; 
           padding: 12px; 
           border-radius: 8px; 
-          background: ${s.device_bg}; 
+          background: ${s.device_bg || 'rgba(0,0,0,0.05)'}; 
           margin-bottom: 8px; 
         }
         .online { color: var(--umc-online); }
         .offline { color: var(--umc-offline); }
         .device-name { 
           font-weight: 600; 
-          font-size: ${s.device_name_size}; 
-          color: ${s.device_name_color};
+          font-size: ${s.device_name_size || '14px'}; 
+          color: ${s.device_name_color || 'inherit'};
           cursor: pointer; 
         }
-        .version-text { font-size: 10px; color: ${s.version_color}; margin-top: -2px; }
+        .version-text { font-size: 10px; color: ${s.version_color || 'gray'}; margin-top: -2px; }
         .update-badge { background: var(--umc-update-blue); color: white; font-size: 9px; padding: 2px 6px; border-radius: 10px; cursor: pointer; animation: pulse 2s infinite; }
         @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(3, 169, 244, 0); } 100% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0); } }
         .stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
-        .bar-bg { flex-grow: 1; height: ${s.bar_height}; background: rgba(150,150,150, 0.2); border-radius: 2px; overflow: hidden; }
+        .bar-bg { flex-grow: 1; height: ${s.bar_height || '4px'}; background: rgba(150,150,150, 0.2); border-radius: 2px; overflow: hidden; }
         .bar-fill { height: 100%; transition: width 0.5s; background: var(--primary-color); }
         .btn-restart { background: transparent; border: none; color: var(--primary-text-color); cursor: pointer; opacity: 0.6; }
-        .btn-restart:hover { opacity: 1; }
       </style>
       <div class="card-container">
         ${this.config.title ? `<div class="header">${this.config.title}</div>` : ''}
@@ -183,12 +187,11 @@ class UnifiMonitorCard extends HTMLElement {
   }
 }
 
-// -------------------------------------------------------------
-// EDITOR MIT MEHREREN AKKORDEONS (Kategorien)
-// -------------------------------------------------------------
 class UnifiMonitorCardEditor extends HTMLElement {
   setConfig(config) {
-    this._config = config;
+    // Sicherstellen, dass config.style existiert
+    this._config = { ...config };
+    if (!this._config.style) this._config.style = {};
     this.render();
   }
 
@@ -196,69 +199,41 @@ class UnifiMonitorCardEditor extends HTMLElement {
 
   render() {
     if (!this._config || !this._hass) return;
+    const style = this._config.style || {};
 
     this.innerHTML = `
       <style>
         details { border: 1px solid var(--divider-color); border-radius: 8px; margin-bottom: 8px; background: var(--card-background-color); }
-        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; transition: background 0.2s; border-radius: 8px; }
-        summary:hover { background: rgba(0,0,0,0.05); }
+        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; }
         .content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
         .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-        ha-textfield, ha-select { width: 100%; }
+        ha-textfield { width: 100%; }
       </style>
 
       <details open>
         <summary>General Settings</summary>
         <div class="content">
-          <ha-textfield label="Card Title" .value="${this._config.title}" .configValue="${"title"}"></ha-textfield>
+          <ha-textfield label="Card Title" .value="${this._config.title || ''}" .configValue="${"title"}"></ha-textfield>
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <span>Auto Discover</span>
-            <ha-switch .checked="${this._config.auto_discover}" .configValue="${"auto_discover"}"></ha-switch>
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <span>Show Firmware Version</span>
-            <ha-switch .checked="${this._config.show_version}" .configValue="${"show_version"}"></ha-switch>
+            <ha-switch .checked="${this._config.auto_discover !== false}" .configValue="${"auto_discover"}"></ha-switch>
           </div>
         </div>
       </details>
 
       <details>
-        <summary>Card Styling (Container)</summary>
+        <summary>Card Styling</summary>
         <div class="content">
-          <ha-textfield label="Background (CSS)" .value="${this._config.style.card_bg}" .configValue="${"style.card_bg"}"></ha-textfield>
+          <ha-textfield label="Background" .value="${style.card_bg || ''}" .configValue="${"style.card_bg"}"></ha-textfield>
           <div class="grid">
-            <ha-textfield label="Padding" .value="${this._config.style.card_padding}" .configValue="${"style.card_padding"}"></ha-textfield>
-            <ha-textfield label="Border Radius" .value="${this._config.style.card_border_radius}" .configValue="${"style.card_border_radius"}"></ha-textfield>
+            <ha-textfield label="Padding" .value="${style.card_padding || ''}" .configValue="${"style.card_padding"}"></ha-textfield>
+            <ha-textfield label="Radius" .value="${style.card_border_radius || ''}" .configValue="${"style.card_border_radius"}"></ha-textfield>
           </div>
-          <ha-textfield label="Box Shadow" .value="${this._config.style.card_shadow}" .configValue="${"style.card_shadow"}"></ha-textfield>
         </div>
       </details>
 
       <details>
-        <summary>Typography & Colors</summary>
-        <div class="content">
-          <div class="grid">
-            <ha-textfield label="Title Size" .value="${this._config.style.title_font_size}" .configValue="${"style.title_font_size"}"></ha-textfield>
-            <ha-textfield label="Title Color" .value="${this._config.style.title_color}" .configValue="${"style.title_color"}"></ha-textfield>
-          </div>
-          <div class="grid">
-            <ha-textfield label="Device Name Size" .value="${this._config.style.device_name_size}" .configValue="${"style.device_name_size"}"></ha-textfield>
-            <ha-textfield label="Name Color" .value="${this._config.style.device_name_color}" .configValue="${"style.device_name_color"}"></ha-textfield>
-          </div>
-          <ha-textfield label="Firmware Text Color" .value="${this._config.style.version_color}" .configValue="${"style.version_color"}"></ha-textfield>
-        </div>
-      </details>
-
-      <details>
-        <summary>Device Rows & Elements</summary>
-        <div class="content">
-          <ha-textfield label="Row Background" .value="${this._config.style.device_bg}" .configValue="${"style.device_bg"}"></ha-textfield>
-          <ha-textfield label="Bar Height" .value="${this._config.style.bar_height}" .configValue="${"style.bar_height"}"></ha-textfield>
-        </div>
-      </details>
-
-      <details>
-        <summary>Device Name Aliases (Manual Naming)</summary>
+        <summary>Device Aliases</summary>
         <div class="content">
           ${this.getDeviceListHTML()}
         </div>
@@ -278,7 +253,7 @@ class UnifiMonitorCardEditor extends HTMLElement {
       }
     }
     return Array.from(prefixes).map(prefix => `
-      <ha-textfield label="Alias for ${prefix}" .value="${this._config.name_overrides?.[prefix] || ''}" .prefix="${prefix}" class="alias-input"></ha-textfield>
+      <ha-textfield label="Alias for ${prefix}" .value="${(this._config.name_overrides || {})[prefix] || ''}" .prefix="${prefix}" class="alias-input"></ha-textfield>
     `).join('');
   }
 
@@ -288,10 +263,11 @@ class UnifiMonitorCardEditor extends HTMLElement {
 
     let newConfig = JSON.parse(JSON.stringify(this._config));
 
-    if (configValue.startsWith('style.')) {
+    if (configValue && configValue.startsWith('style.')) {
       const key = configValue.split('.')[1];
+      if (!newConfig.style) newConfig.style = {};
       newConfig.style[key] = value;
-    } else {
+    } else if (configValue) {
       newConfig[configValue] = value;
     }
 
