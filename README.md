@@ -11,12 +11,12 @@ It automatically matches related entities (CPU, RAM, Temperature, Update, and Re
 *(Insert Screenshot here)*
 ## ✨ Features
 
-- **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code!
-- **Auto-Matching:** It automatically pulls CPU, Memory, Temperature, Update-Status, and Restart-Buttons for each discovered device.
+- **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code.
+- **🖥️ Full Visual Editor:** Configure titles, behaviors, and all colors directly through the Home Assistant UI. No YAML required!
+- **Auto-Matching:** Automatically pulls CPU, Memory, Temperature, Update-Status, and Restart-Buttons for each discovered device.
 - **Visual Bars:** Clean and compact progress bars for CPU and RAM utilization.
 - **Smart Rendering:** Only displays what is available. If an Access Point doesn't provide temperature data, the row is dynamically hidden.
 - **Interactive:** One-click device restarts and quick update installations directly from the dashboard.
-- **Highly Customizable:** Change every color, background, and shadow using CSS variables via `card_mod`.
 
 ## ⚙️ Installation
 
@@ -65,48 +65,36 @@ devices:
 
 ### Configuration Variables
 
+All visual parameters can be set via the UI Editor. For YAML users, here are the available keys:
+
 | Name | Type | Requirement | Description |
 | --- | --- | --- | --- |
 | `type` | string | **Required** | `custom:unifi-monitor-card` |
 | `title` | string | Optional | The header title of the card. |
 | `auto_discover` | boolean | Optional | Default is `true`. Automatically scans for UniFi devices if no `devices` list is provided. |
+| `color_bg` | string | Optional | Card background (e.g. `#1e1e1e` or `var(--ha-card-background)`). |
+| `border_radius` | string | Optional | Corner radius (e.g. `16px`). |
+| `color_cpu` | string | Optional | Color for the CPU progress bar. |
+| `color_ram` | string | Optional | Color for the Memory progress bar. |
+| `color_online` | string | Optional | Icon color when the device is online. |
+| `color_offline`| string | Optional | Icon color when the device is offline. |
 | `devices` | list | Optional | A manual list of devices. Overrides auto-discovery if provided. |
-| `> prefix` | string | **Required*** | *(Only if using manual list)* The entity prefix of your device (e.g., `udm_se` for `sensor.udm_se_cpu_utilization`). |
+| `> prefix` | string | **Required*** | *(Only if using manual list)* The entity prefix of your device. |
 | `> name` | string | Optional | Custom display name. Defaults to the formatted prefix. |
 | `> icon` | string | Optional | Custom MDI icon (e.g., `mdi:router-network`). |
 
-## 🎨 Styling (CSS Variables)
+## 🎨 Advanced Styling (card-mod)
 
-This card is built to be styled! You can easily adjust the look using [card-mod](https://github.com/thomasloven/lovelace-card-mod).
+Since styling is now natively supported via the Visual Editor, you only need [card-mod](https://github.com/thomasloven/lovelace-card-mod) if you want to change deeply nested CSS attributes (like font families or box shadows).
 
-Here are the available CSS variables and their default values:
+Here are the underlying CSS variables:
 
-| Variable | Default Value | Description |
+| Variable | Maps to UI Setting | Default Value |
 | --- | --- | --- |
-| `--umc-bg` | `var(--ha-card-background)` | Background color of the main card. |
-| `--umc-border-radius` | `var(--ha-card-border-radius, 12px)` | Corner radius of the card. |
-| `--umc-shadow` | `var(--ha-card-box-shadow)` | Box shadow of the card. |
-| `--umc-icon-color` | `var(--state-icon-color, #44739e)` | Default icon color. |
-| `--umc-icon-online` | `#4caf50` | Icon color when the device is online/connected. |
-| `--umc-icon-offline`| `#f44336` | Icon color when the device is offline. |
-| `--umc-bar-bg` | `rgba(150, 150, 150, 0.2)` | Background color of the CPU/RAM bars. |
-| `--umc-bar-cpu` | `var(--primary-color, #03a9f4)` | Fill color for the CPU bar. |
-| `--umc-bar-ram` | `var(--accent-color, #ff9800)` | Fill color for the RAM bar. |
-
-### Styling Example
-
-```yaml
-type: custom:unifi-monitor-card
-title: Network
-card_mod:
-  style: |
-    :host {
-      --umc-bg: #1e1e1e;
-      --umc-border-radius: 16px;
-      --umc-bar-cpu: #00e5ff;
-      --umc-bar-ram: #b2ff59;
-    }
-```
+| `--umc-bg` | Card Background | `var(--ha-card-background)` |
+| `--umc-border-radius` | Border Radius | `var(--ha-card-border-radius, 12px)` |
+| `--umc-bar-cpu` | CPU Bar Color | `var(--primary-color, #03a9f4)` |
+| `--umc-bar-ram` | RAM Bar Color | `var(--accent-color, #ff9800)
 
 ## 🤝 Contributing
 Feel free to open an issue or submit a pull request if you have ideas for new features or find a bug!
