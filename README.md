@@ -8,9 +8,11 @@ A highly customizable, responsive, and lightweight Home Assistant Lovelace card 
 It automatically matches related entities (CPU, RAM, Temperature, Update, and Restart) based on a simple device prefix.
 
 *(Insert Screenshot here)*
+*(Insert Screenshot here)*
 ## ✨ Features
 
-- **Auto-Matching:** Just provide the entity prefix (e.g., `udm_se`), and the card automatically pulls CPU, Memory, Temperature, Update-Status, and Restart-Buttons.
+- **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code!
+- **Auto-Matching:** It automatically pulls CPU, Memory, Temperature, Update-Status, and Restart-Buttons for each discovered device.
 - **Visual Bars:** Clean and compact progress bars for CPU and RAM utilization.
 - **Smart Rendering:** Only displays what is available. If an Access Point doesn't provide temperature data, the row is dynamically hidden.
 - **Interactive:** One-click device restarts and quick update installations directly from the dashboard.
@@ -37,7 +39,17 @@ It automatically matches related entities (CPU, RAM, Temperature, Update, and Re
 
 ## 🛠️ Configuration
 
-To use the card, add it to your dashboard using the manual YAML editor.
+Thanks to Auto-Discovery, the basic configuration requires almost no setup.
+
+### Basic Setup (Auto-Discovery)
+Just add the card type to your dashboard. It will automatically find and render your UniFi devices.
+
+```yaml
+type: custom:unifi-monitor-card
+title: Network Infrastructure
+````
+### Advanced Setup (Manual Override)
+If you want to rename specific devices, change their icons, or only show a specific subset of your devices, you can override the auto-discovery by providing a `devices` list.
 
 ```yaml
 type: custom:unifi-monitor-card
@@ -49,18 +61,17 @@ devices:
   - prefix: usw_pro_48_poe
     name: Main Switch 48-PoE
     icon: mdi:switch
-  - prefix: u6_pro_wohnen
-    name: AP Living Room
-    icon: mdi:access-point
-````
+```
+
 ### Configuration Variables
 
 | Name | Type | Requirement | Description |
 | --- | --- | --- | --- |
 | `type` | string | **Required** | `custom:unifi-monitor-card` |
 | `title` | string | Optional | The header title of the card. |
-| `devices` | list | **Required** | A list of your UniFi devices. |
-| `> prefix` | string | **Required** | The entity prefix of your device (e.g., `udm_se` for `sensor.udm_se_cpu_utilization`). |
+| `auto_discover` | boolean | Optional | Default is `true`. Automatically scans for UniFi devices if no `devices` list is provided. |
+| `devices` | list | Optional | A manual list of devices. Overrides auto-discovery if provided. |
+| `> prefix` | string | **Required*** | *(Only if using manual list)* The entity prefix of your device (e.g., `udm_se` for `sensor.udm_se_cpu_utilization`). |
 | `> name` | string | Optional | Custom display name. Defaults to the formatted prefix. |
 | `> icon` | string | Optional | Custom MDI icon (e.g., `mdi:router-network`). |
 
@@ -87,8 +98,6 @@ Here are the available CSS variables and their default values:
 ```yaml
 type: custom:unifi-monitor-card
 title: Network
-devices:
-  - prefix: udm_se
 card_mod:
   style: |
     :host {
@@ -98,5 +107,9 @@ card_mod:
       --umc-bar-ram: #b2ff59;
     }
 ```
+
+## 🤝 Contributing
+Feel free to open an issue or submit a pull request if you have ideas for new features or find a bug!
+
 ## 📄 License
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
