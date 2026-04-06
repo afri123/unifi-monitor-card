@@ -9,21 +9,19 @@ It automatically matches related entities (CPU, RAM, Temperature, Update, and Re
 
 <table>
   <tr>
-    <td><img width="681" height="1299" alt="unifi monitor card 1" src="https://github.com/user-attachments/assets/1b420cfe-f0d6-4b5f-8c1a-000b8760fdea" />
-</td> 
-    <td><img width="821" height="1485" alt="unifi monitor card 2" src="https://github.com/user-attachments/assets/5802ab79-f5f2-48a0-a0fd-987c484c766d" />
-</td> 
-  </td>
+    <td><img width="681" height="1299" alt="unifi monitor card 1" src="https://github.com/user-attachments/assets/1b420cfe-f0d6-4b5f-8c1a-000b8760fdea" /></td> 
+    <td><img width="821" height="1485" alt="unifi monitor card 2" src="https://github.com/user-attachments/assets/5802ab79-f5f2-48a0-a0fd-987c484c766d" /></td> 
   </tr>
 </table>
 
 ## ✨ Features
 
 - **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code.
-- **🖥️ Full Visual Editor:** Configure titles, behaviors, and all colors directly through the Home Assistant UI. No YAML required!
-- **Auto-Matching:** Automatically pulls CPU, Memory, Temperature, Update-Status, and Restart-Buttons for each discovered device.
-- **Visual Bars:** Clean and compact progress bars for CPU and RAM utilization.
-- **Smart Rendering:** Only displays what is available. If an Access Point doesn't provide temperature data, the row is dynamically hidden.
+- **📸 Real Device Images:** Automatically loads high-resolution, accurate hardware images for your specific UniFi devices (Credit to the [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository). Includes a built-in dropdown picker to manually override images if needed!
+- **⚡ Smart Rendering Engine:** Built with a custom DOM-diffing algorithm. Values update instantly in real-time without the card flickering or losing hover states.
+- **🖥️ Full Visual Editor:** Configure titles, typography (fonts, uppercase/lowercase), behaviors, and all colors directly through the Home Assistant UI. No YAML required!
+- **📊 Comprehensive Metrics:** Automatically pulls CPU, Memory, Temperature, Uptime, Connected Clients, IP Addresses, and Firmware Updates.
+- **📱 Compact Mode:** Toggleable denser layout for mobile screens or tight dashboards.
 - **Interactive:** One-click device restarts and quick update installations directly from the dashboard.
 
 ## ⚙️ Installation
@@ -73,36 +71,44 @@ devices:
 
 ### Configuration Variables
 
-All visual parameters can be set via the UI Editor. For YAML users, here are the available keys:
+All visual parameters can be set via the UI Editor. For YAML power users, here are the available root keys:
 
-| Name | Type | Requirement | Description |
+| Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | `type` | string | **Required** | `custom:unifi-monitor-card` |
-| `title` | string | Optional | The header title of the card. |
-| `auto_discover` | boolean | Optional | Default is `true`. Automatically scans for UniFi devices if no `devices` list is provided. |
-| `color_bg` | string | Optional | Card background (e.g. `#1e1e1e` or `var(--ha-card-background)`). |
-| `border_radius` | string | Optional | Corner radius (e.g. `16px`). |
-| `color_cpu` | string | Optional | Color for the CPU progress bar. |
-| `color_ram` | string | Optional | Color for the Memory progress bar. |
-| `color_online` | string | Optional | Icon color when the device is online. |
-| `color_offline`| string | Optional | Icon color when the device is offline. |
-| `devices` | list | Optional | A manual list of devices. Overrides auto-discovery if provided. |
-| `> prefix` | string | **Required*** | *(Only if using manual list)* The entity prefix of your device. |
-| `> name` | string | Optional | Custom display name. Defaults to the formatted prefix. |
-| `> icon` | string | Optional | Custom MDI icon (e.g., `mdi:router-network`). |
+| `title` | string | `Network Infrastructure`| The header title of the card. |
+| `title_icon` | string | `mdi:lan` | The icon next to the title. |
+| `auto_discover` | boolean | `true` | Automatically scans for UniFi entities. |
+| `compact_mode` | boolean | `false` | Reduces padding and gap sizes for a denser look. |
+| `sort_online_first` | boolean | `true` | Keeps online devices at the top of the list. |
+| `show_real_images` | boolean | `true` | Loads hardware PNGs instead of MDI icons. |
+| `image_base_url` | string | *GitHub Repo URL* | The source URL for the real images. |
+| `show_version` | boolean | `true` | Show firmware version chip. |
+| `show_temp` | boolean | `true` | Show temperature progress bar. |
+| `show_uptime` | boolean | `true` | Show uptime chip. |
+| `show_clients` | boolean | `true` | Show connected clients badge. |
+| `show_ip` | boolean | `true` | Show IP address tag. |
+| `name_overrides` | object | `{}` | Dictionary mapping entity prefixes to custom display names. |
+| `image_overrides`| object | `{}` | Dictionary mapping entity prefixes to specific image filenames. |
+| `style` | object | `{}` | Dictionary containing all visual CSS overrides (colors, fonts). |
+
+#### Style Object Variables (`style:`)
+You can customize almost every pixel by defining variables inside the `style` object. Example:
+```yaml
+style:
+  card_bg: "rgba(20, 20, 20, 0.9)"
+  accent_color: "#ff9800"
+  title_text_transform: "none"
+  font_family: "Roboto, sans-serif"
+  icon_online_color: "#00E676"
+  bar_cpu_color: "#29b6f6"
 
 ## 🎨 Advanced Styling (card-mod)
 
-Since styling is now natively supported via the Visual Editor, you only need [card-mod](https://github.com/thomasloven/lovelace-card-mod) if you want to change deeply nested CSS attributes (like font families or box shadows).
+Since styling is now natively supported and fully customizable via the Visual Editor (including typography, colors, and backgrounds), you rarely need [card-mod](https://github.com/thomasloven/lovelace-card-mod). The built-in `style` configuration uses standard Home Assistant CSS variables (`var(--ha-card-background)`) out of the box, ensuring perfect integration with your current theme (Light/Dark mode).
 
-Here are the underlying CSS variables:
-
-| Variable | Maps to UI Setting | Default Value |
-| --- | --- | --- |
-| `--umc-bg` | Card Background | `var(--ha-card-background)` |
-| `--umc-border-radius` | Border Radius | `var(--ha-card-border-radius, 12px)` |
-| `--umc-bar-cpu` | CPU Bar Color | `var(--primary-color, #03a9f4)` |
-| `--umc-bar-ram` | RAM Bar Color | `var(--accent-color, #ff9800)
+## 🙏 Credits
+- **Hardware Images:** High-quality UniFi device images are pulled from the excellent [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository.
 
 ## 🤝 Contributing
 Feel free to open an issue or submit a pull request if you have ideas for new features or find a bug!
