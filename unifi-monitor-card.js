@@ -1,13 +1,8 @@
 // ================================================================
-// UniFi Monitor Card  v3.0
-// ================================================================
-// Design direction: "Precision Instrument"
-// Inspired by high-end network ops dashboards and aerospace HUDs.
-// Monospaced data readouts, sharp geometry, controlled density.
-// Every pixel has a job.
+// UniFi Monitor Card  v0.0.12
 // ================================================================
 
-const UMC_VERSION = "3.0.0";
+const UMC_VERSION = "0.0.12";
 
 const UMC_DEFAULTS = {
   title:             "Network Infrastructure",
@@ -27,13 +22,14 @@ const UMC_DEFAULTS = {
     card_shadow:        "var(--ha-card-box-shadow, 0 2px 16px rgba(0,0,0,.07))",
     // Accent / brand
     accent_color:       "var(--primary-color, #2196f3)",
-    // Header text
-    title_font_size:    "10px",
+    // Typography
+    font_family:        "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    title_font_size:    "12px", // Increased for better readability
     title_color:        "var(--secondary-text-color)",
     // Device rows
     device_bg:          "rgba(128,128,128,.05)",
     device_bg_hover:    "rgba(128,128,128,.10)",
-    device_name_size:   "14px",
+    device_name_size:   "15px", // Increased for better readability
     device_name_color:  "var(--primary-text-color)",
     // Meta / secondary text
     meta_color:         "var(--disabled-text-color, #9e9e9e)",
@@ -135,7 +131,7 @@ class UnifiMonitorCard extends HTMLElement {
   border-radius: ${s.card_border_radius};
   padding:       ${s.card_padding};
   box-shadow:    ${s.card_shadow};
-  font-family:   'DM Mono', 'Roboto Mono', 'Courier New', monospace;
+  font-family:   ${s.font_family};
   color:         var(--primary-text-color);
   overflow:      hidden;
   position:      relative;
@@ -162,21 +158,21 @@ class UnifiMonitorCard extends HTMLElement {
   border-bottom:   1px solid rgba(128,128,128,.10);
 }
 .header-left { display: flex; align-items: center; gap: 7px; }
-.header-icon { --mdc-icon-size: 13px; color: ${s.accent_color}; opacity: .85; }
+.header-icon { --mdc-icon-size: 14px; color: ${s.accent_color}; opacity: .85; }
 .card-title {
   font-size:      ${s.title_font_size};
   font-weight:    800;
   color:          ${s.title_color};
-  letter-spacing: .16em;
+  letter-spacing: .12em;
   text-transform: uppercase;
 }
 .pills { display: flex; gap: 5px; }
 .pill {
-  font-size:      9px;
+  font-size:      10px;
   font-weight:    700;
   padding:        2px 8px;
   border-radius:  20px;
-  letter-spacing: .06em;
+  letter-spacing: .04em;
   text-transform: uppercase;
 }
 .pill-on  { background: rgba(0,200,83,.12);  color: ${s.icon_online_color};  }
@@ -247,11 +243,18 @@ class UnifiMonitorCard extends HTMLElement {
 
 /* ── Info col ───────────────────────────────────────────── */
 .info { min-width: 0; }
+.info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
 .name-row {
   display:     flex;
   align-items: center;
   gap:         7px;
   flex-wrap:   wrap;
+  flex: 1;
 }
 .name {
   font-size:      ${s.device_name_size};
@@ -261,11 +264,37 @@ class UnifiMonitorCard extends HTMLElement {
   white-space:    nowrap;
   overflow:       hidden;
   text-overflow:  ellipsis;
-  font-family:    var(--primary-font-family, 'Roboto', sans-serif);
   letter-spacing: -.01em;
   transition:     opacity .13s;
 }
 .name:hover { opacity: .65; }
+
+/* ── Tags & Badges ───────────────────────────────────────── */
+.type-tag {
+  font-size:      9px;
+  font-weight:    800;
+  letter-spacing: .06em;
+  padding:        2px 5px;
+  border-radius:  4px;
+  background:     rgba(128,128,128,.15);
+  color:          ${s.meta_color};
+  text-transform: uppercase;
+}
+
+.client-badge {
+  display:       flex;
+  align-items:   center;
+  gap:           4px;
+  font-size:     11px;
+  font-weight:   600;
+  color:         var(--primary-text-color);
+  background:    rgba(128,128,128,.08);
+  padding:       3px 7px;
+  border-radius:  6px;
+  border:        1px solid rgba(128,128,128,.12);
+  flex-shrink:   0;
+}
+.client-badge ha-icon { --mdc-icon-size: 13px; color: ${s.accent_color}; }
 
 .badge {
   display:        inline-flex;
@@ -306,11 +335,11 @@ class UnifiMonitorCard extends HTMLElement {
   display:     flex;
   align-items: center;
   gap:         3px;
-  font-size:   9.5px;
+  font-size:   10px;
   color:       ${s.meta_color};
   letter-spacing: .02em;
 }
-.chip ha-icon { --mdc-icon-size: 10px; opacity: .6; }
+.chip ha-icon { --mdc-icon-size: 11px; opacity: .6; }
 
 /* ── Action buttons ─────────────────────────────────────── */
 .actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
@@ -349,7 +378,7 @@ class UnifiMonitorCard extends HTMLElement {
   gap:                   8px;
 }
 .mlabel {
-  font-size:      8px;
+  font-size:      9px;
   font-weight:    700;
   letter-spacing: .10em;
   text-transform: uppercase;
@@ -373,11 +402,11 @@ class UnifiMonitorCard extends HTMLElement {
 .fill.crit { filter: brightness(1.5) saturate(1.3); }
 
 .mval {
-  font-size:   9.5px;
+  font-size:   10px;
   font-weight: 700;
   text-align:  right;
   letter-spacing: .02em;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: tabular-nums; /* Keeps numbers aligned */
   color:       var(--primary-text-color);
 }
 .mval.warn { color: #ffab00; }
@@ -388,7 +417,7 @@ class UnifiMonitorCard extends HTMLElement {
   padding:    36px 20px;
   text-align: center;
   color:      ${s.meta_color};
-  font-size:  12px;
+  font-size:  13px;
   line-height: 1.6;
 }
 .empty ha-icon { --mdc-icon-size: 36px; display: block; margin: 0 auto 10px; opacity: .22; }
@@ -427,10 +456,12 @@ class UnifiMonitorCard extends HTMLElement {
                      .replace(/ cpu utilization/i, "")
                      .trim();
       let icon = "mdi:router-network";
-      if (/usw|switch/.test(pfx))                icon = "mdi:switch";
-      if (/u6|uap|^ap_|wifi|iw|flex/.test(pfx))  icon = "mdi:access-point";
-      if (/udm|dream|usg/.test(pfx))             icon = "mdi:shield-home";
-      out.push({ prefix: pfx, name, icon });
+      let type_label = "GATEWAY";
+      
+      if (/usw|switch/.test(pfx)) { icon = "mdi:switch"; type_label = "SWITCH"; }
+      else if (/u6|uap|^ap_|wifi|iw|flex/.test(pfx)) { icon = "mdi:access-point"; type_label = "AP"; }
+      
+      out.push({ prefix: pfx, name, icon, type_label });
     });
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -482,6 +513,7 @@ class UnifiMonitorCard extends HTMLElement {
     for (const dev of devices) {
       const p   = dev.prefix;
       const nom = cfg.name_overrides[p] || dev.name || p;
+      const typeLabel = dev.type_label || "DEVICE";
 
       const cpuEnt = this._hass.states[`sensor.${p}_cpu_utilization`];
       const ramEnt = this._hass.states[`sensor.${p}_memory_utilization`];
@@ -515,8 +547,6 @@ class UnifiMonitorCard extends HTMLElement {
         chips.push(`<span class="chip"><ha-icon icon="mdi:tag-outline"></ha-icon>${version}</span>`);
       if (cfg.show_uptime && upt)
         chips.push(`<span class="chip"><ha-icon icon="mdi:clock-outline"></ha-icon>${upt}</span>`);
-      if (cfg.show_clients && cli != null && !isNaN(cli))
-        chips.push(`<span class="chip"><ha-icon icon="mdi:laptop"></ha-icon>${cli}</span>`);
 
       // Bars
       const bars = [];
@@ -535,13 +565,21 @@ class UnifiMonitorCard extends HTMLElement {
       ${dev.online ? '<span class="dot"></span>' : ""}
     </div>
     <div class="info">
-      <div class="name-row">
-        <span class="name" onclick="this.getRootNode().host._openDetails('${p}')">${nom}</span>
-        ${!dev.online ? `<span class="offline-tag">offline</span>` : ""}
-        ${hasUpd
-          ? `<span class="badge" onclick="this.getRootNode().host._triggerUpdate('${p}')">
-               <ha-icon icon="mdi:arrow-up-circle"></ha-icon>Update
-             </span>`
+      <div class="info-header">
+        <div class="name-row">
+          <span class="name" onclick="this.getRootNode().host._openDetails('${p}')">${nom}</span>
+          <span class="type-tag">${typeLabel}</span>
+          ${!dev.online ? `<span class="offline-tag">offline</span>` : ""}
+          ${hasUpd
+            ? `<span class="badge" onclick="this.getRootNode().host._triggerUpdate('${p}')">
+                 <ha-icon icon="mdi:arrow-up-circle"></ha-icon>Update
+               </span>`
+            : ""}
+        </div>
+        ${(cfg.show_clients && cli != null && !isNaN(cli)) 
+          ? `<div class="client-badge" title="Connected Clients">
+               <ha-icon icon="mdi:account-multiple"></ha-icon> ${cli}
+             </div>` 
           : ""}
       </div>
       ${chips.length ? `<div class="meta">${chips.join("")}</div>` : ""}
@@ -695,7 +733,6 @@ code {
 }
 </style>
 
-<!-- General -->
 <details open>
   <summary><ha-icon icon="mdi:cog-outline"></ha-icon>General</summary>
   <div class="content">
@@ -715,7 +752,6 @@ code {
   </div>
 </details>
 
-<!-- Display Options -->
 <details>
   <summary><ha-icon icon="mdi:eye-outline"></ha-icon>Display Options</summary>
   <div class="content">
@@ -732,18 +768,17 @@ code {
       <ha-switch id="sw_uptime"></ha-switch>
     </div>
     <div class="sw-row">
-      <div class="sw-label">Connected clients</div>
+      <div class="sw-label">Connected clients (Badge)</div>
       <ha-switch id="sw_clients"></ha-switch>
     </div>
   </div>
 </details>
 
-<!-- Card Styling -->
 <details>
   <summary><ha-icon icon="mdi:palette-outline"></ha-icon>Card Styling</summary>
   <div class="content">
     <ha-textfield id="f_card_bg" label="Background"></ha-textfield>
-    <p class="hint">Any CSS value: <code>#1c1c1e</code> · <code>rgba(255,255,255,.9)</code> · <code>linear-gradient(135deg,#0f0c29,#302b63)</code> · <code>var(--ha-card-background)</code></p>
+    <p class="hint">Any CSS value: <code>#1c1c1e</code> · <code>rgba(255,255,255,.9)</code> · <code>var(--ha-card-background)</code></p>
     <div class="row2">
       <ha-textfield id="f_card_border_radius" label="Border radius"></ha-textfield>
       <ha-textfield id="f_card_padding"       label="Padding"></ha-textfield>
@@ -753,10 +788,11 @@ code {
   </div>
 </details>
 
-<!-- Typography -->
 <details>
   <summary><ha-icon icon="mdi:format-text"></ha-icon>Typography</summary>
   <div class="content">
+    <ha-textfield id="f_font_family" label="Global Font Family"></ha-textfield>
+    <p class="hint">e.g. <code>var(--primary-font-family)</code>, <code>Roboto</code>, or <code>sans-serif</code>.</p>
     <div class="row2">
       <ha-textfield id="f_title_font_size"   label="Title size"></ha-textfield>
       <ha-textfield id="f_title_color"       label="Title color"></ha-textfield>
@@ -769,7 +805,6 @@ code {
   </div>
 </details>
 
-<!-- Device Rows -->
 <details>
   <summary><ha-icon icon="mdi:server-outline"></ha-icon>Device Rows</summary>
   <div class="content">
@@ -782,7 +817,6 @@ code {
   </div>
 </details>
 
-<!-- Metric Bars -->
 <details>
   <summary><ha-icon icon="mdi:chart-bar"></ha-icon>Metric Bars</summary>
   <div class="content">
@@ -795,7 +829,6 @@ code {
   </div>
 </details>
 
-<!-- Name Aliases -->
 <details>
   <summary><ha-icon icon="mdi:rename-outline"></ha-icon>Device Name Aliases</summary>
   <div class="content" id="alias-list">
@@ -863,6 +896,7 @@ code {
       f_card_padding:        ["style", "card_padding"],
       f_card_shadow:         ["style", "card_shadow"],
       f_accent_color:        ["style", "accent_color"],
+      f_font_family:         ["style", "font_family"],
       f_title_font_size:     ["style", "title_font_size"],
       f_title_color:         ["style", "title_color"],
       f_device_name_size:    ["style", "device_name_size"],
@@ -905,6 +939,7 @@ code {
     set("f_card_padding",       s.card_padding);
     set("f_card_shadow",        s.card_shadow);
     set("f_accent_color",       s.accent_color);
+    set("f_font_family",        s.font_family);
     set("f_title_font_size",    s.title_font_size);
     set("f_title_color",        s.title_color);
     set("f_device_name_size",   s.device_name_size);
