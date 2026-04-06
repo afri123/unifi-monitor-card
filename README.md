@@ -7,7 +7,15 @@ A highly customizable, responsive, and lightweight Home Assistant Lovelace card 
 
 It automatically matches related entities (CPU, RAM, Temperature, Update, and Restart) based on a simple device prefix.
 
-<img height=400px alt="unifi monitor card 1" src="https://github.com/user-attachments/assets/278b98f0-99d7-4547-9f2d-8dcad7e3c20e" />
+<table>
+  <tr>
+    <td><img width="681" height="1299" alt="unifi monitor card 1" src="https://github.com/user-attachments/assets/1b420cfe-f0d6-4b5f-8c1a-000b8760fdea" />
+</td> 
+    <td><img width="821" height="1485" alt="unifi monitor card 2" src="https://github.com/user-attachments/assets/5802ab79-f5f2-48a0-a0fd-987c484c766d" />
+</td> 
+  </td>
+  </tr>
+</table>
 
 ## ✨ Features
 
