@@ -13,6 +13,8 @@ const UMC_DEFAULTS = {
   show_uptime:       true,
   show_clients:      true,
   show_ip:           true,
+  show_real_images:  true,
+  image_base_url:    "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/",
   compact_mode:      false,
   sort_online_first: true,
   name_overrides:    {},
@@ -98,6 +100,7 @@ class UnifiMonitorCard extends HTMLElement {
       show_uptime:   true,
       show_clients:  true,
       show_ip:       true,
+      show_real_images: true,
     };
   }
 
@@ -218,7 +221,7 @@ class UnifiMonitorCard extends HTMLElement {
   gap:                   11px;
 }
 
-/* ── Status icon ─────────────────────────────────────────── */
+/* ── Status icon & Real Images ────────────────────────────── */
 .sicon {
   width: 34px; height: 34px;
   border-radius: 8px;
@@ -232,6 +235,17 @@ class UnifiMonitorCard extends HTMLElement {
 .sicon ha-icon { --mdc-icon-size: 18px; }
 .sicon.is-online  { background: rgba(0,200,83,.09);  color: ${s.icon_online_color}; }
 .sicon.is-offline { background: rgba(255,23,68,.08); color: ${s.icon_offline_color}; }
+
+.real-img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  transition: filter 0.3s;
+}
+.row.is-offline .real-img {
+  filter: grayscale(100%) opacity(60%);
+}
+
 .dot {
   position:      absolute;
   bottom: 3px; right: 3px;
@@ -239,6 +253,7 @@ class UnifiMonitorCard extends HTMLElement {
   border-radius: 50%;
   background:    ${s.icon_online_color};
   animation:     umcDot 2.8s infinite ease-in-out;
+  z-index: 2;
 }
 @keyframes umcDot {
   0%   { box-shadow: 0 0 0 0   rgba(0,200,83,.6); }
@@ -422,7 +437,7 @@ class UnifiMonitorCard extends HTMLElement {
   font-weight: 700;
   text-align:  right;
   letter-spacing: .02em;
-  font-variant-numeric: tabular-nums; /* Keeps numbers aligned */
+  font-variant-numeric: tabular-nums;
   color:       var(--primary-text-color);
 }
 .mval.warn { color: #ffab00; }
@@ -545,12 +560,12 @@ class UnifiMonitorCard extends HTMLElement {
                    || updEnt?.attributes?.latest_version
                    || null;
 
-      // Smarte IP Extraktion (aus friendly_name String oder dediziertem Sensor)
+      // Smarte IP Extraktion
       const rawName = cpuEnt?.attributes?.friendly_name || p;
       const ipMatch = rawName.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
       const ipAddr  = this._hass.states[`sensor.${p}_ip_address`]?.state || (ipMatch ? ipMatch[0] : null);
 
-      // Smarte Client Extraktion (berücksichtigt verschiedene UniFi-Sensornamen)
+      // Smarte Client Extraktion
       let cli = null;
       const cliEnt = this._hass.states[`sensor.${p}_clients`] 
                   || this._hass.states[`sensor.${p}_users`] 
@@ -590,11 +605,18 @@ class UnifiMonitorCard extends HTMLElement {
       if (cfg.show_temp && tmp != null && !isNaN(tmp))
         bars.push(this._bar("TMP", "temp", Math.min(tmp, 100), tmpSev, `${tmp.toFixed(0)}°`));
 
+      const baseUrl = cfg.image_base_url || "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/";
+      const imgUrl = `${baseUrl}${p}.png`;
+
       html += `
 <div class="row${dev.online ? " is-online" : " is-offline"}">
   <div class="top">
     <div class="sicon ${dev.online ? "is-online" : "is-offline"}">
-      <ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>
+      ${cfg.show_real_images 
+        ? `<img class="real-img" src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
+           <ha-icon icon="${dev.icon || "mdi:router-network"}" style="display:none;"></ha-icon>`
+        : `<ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`
+      }
       ${dev.online ? '<span class="dot"></span>' : ""}
     </div>
     <div class="info">
@@ -751,7 +773,7 @@ summary ha-icon { --mdc-icon-size: 14px; }
 }
 .sw-label { font-size: 13px; color: var(--primary-text-color); }
 .sw-sub   { font-size: 11px; color: var(--secondary-text-color); margin-top: 1px; }
-ha-textfield { width: 100%; }
+ha-textfield, ha-icon-picker { width: 100%; }
 .hint {
   font-size:   11px;
   color:       var(--secondary-text-color);
@@ -772,7 +794,7 @@ code {
   <div class="content">
     <div class="row2">
       <ha-textfield id="f_title" label="Card title"></ha-textfield>
-      <ha-textfield id="f_title_icon" label="Title icon (e.g. mdi:lan)"></ha-textfield>
+      <ha-icon-picker id="f_title_icon" label="Title icon"></ha-icon-picker>
     </div>
     <div class="sw-row">
       <div><div class="sw-label">Auto-discover devices</div><div class="sw-sub">Scan HA for UniFi entities</div></div>
@@ -812,6 +834,11 @@ code {
       <div class="sw-label">IP Address</div>
       <ha-switch id="sw_ip"></ha-switch>
     </div>
+    <div class="sw-row">
+      <div><div class="sw-label">Real Device Images</div><div class="sw-sub">Load images instead of icons</div></div>
+      <ha-switch id="sw_real_images"></ha-switch>
+    </div>
+    <ha-textfield id="f_image_base_url" label="Image Base URL"></ha-textfield>
   </div>
 </details>
 
@@ -921,6 +948,8 @@ code {
       el.addEventListener("change", e => this._onChange(e)));
     this.shadowRoot.querySelectorAll("ha-switch").forEach(el =>
       el.addEventListener("change", e => this._onChange(e)));
+    this.shadowRoot.querySelectorAll("ha-icon-picker").forEach(el =>
+      el.addEventListener("value-changed", e => this._onChange(e)));
   }
 
   static get _MAP() {
@@ -935,6 +964,8 @@ code {
       sw_uptime:             ["show_uptime"],
       sw_clients:            ["show_clients"],
       sw_ip:                 ["show_ip"],
+      sw_real_images:        ["show_real_images"],
+      f_image_base_url:      ["image_base_url"],
       f_card_bg:             ["style", "card_bg"],
       f_card_border_radius:  ["style", "card_border_radius"],
       f_card_padding:        ["style", "card_padding"],
@@ -981,6 +1012,8 @@ code {
     chk("sw_uptime",            c.show_uptime        !== false);
     chk("sw_clients",           c.show_clients       !== false);
     chk("sw_ip",                c.show_ip            !== false);
+    chk("sw_real_images",       c.show_real_images   !== false);
+    set("f_image_base_url",     c.image_base_url || "");
     set("f_card_bg",            s.card_bg);
     set("f_card_border_radius", s.card_border_radius);
     set("f_card_padding",       s.card_padding);
@@ -1013,7 +1046,12 @@ code {
   _onChange(ev) {
     if (!this._config) return;
     const el    = ev.target;
-    const value = el.tagName === "HA-SWITCH" ? el.checked : el.value;
+    let value   = el.value;
+    
+    // Für ha-icon-picker und ha-switch
+    if (ev.type === "value-changed") value = ev.detail.value;
+    if (el.tagName === "HA-SWITCH") value = el.checked;
+    
     const newCfg = _mergeConfig(this._config);
 
     if (el.dataset.aliasPfx) {
