@@ -1,8 +1,8 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.13
+// UniFi Monitor Card  v0.0.14
 // ================================================================
 
-const UMC_VERSION = "0.0.13";
+const UMC_VERSION = "0.0.14";
 
 const UMC_DEFAULTS = {
   title:             "Network Infrastructure",
@@ -497,6 +497,35 @@ class UnifiMonitorCard extends HTMLElement {
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
 
+  // Auto-format the HA internal prefix to the exact case required by the image repo
+  _formatImageName(pfx) {
+    // Known exact matches to compensate for repo case rules
+    const exact = {
+      'udm_pro': 'UDM-Pro', 'udm_se': 'UDM-SE', 'udm': 'UDM', 'udr': 'UDR', 'usg': 'USG',
+      'u6_pro': 'U6-Pro', 'u6_lite': 'U6-Lite', 'u6_lr': 'U6-LR', 'u6_ent': 'U6-Enterprise',
+      'u6_mesh': 'U6-Mesh', 'u6_iw': 'U6-IW', 'u6_extender': 'U6-Extender',
+      'uap_ac_pro': 'UAP-AC-Pro', 'uap_ac_lite': 'UAP-AC-Lite', 'uap_ac_lr': 'UAP-AC-LR',
+      'uap_ac_m': 'UAP-AC-M', 'uap_ac_m_pro': 'UAP-AC-M-Pro', 'uap_ac_iw': 'UAP-AC-IW',
+      'uap_flexhd': 'UAP-FlexHD', 'uap_beaconhd': 'UAP-BeaconHD', 'uap_nano': 'UAP-nanoHD',
+      'usw_flex_mini': 'USW-Flex-Mini', 'usw_flex': 'USW-Flex',
+      'usw_lite_8_poe': 'USW-Lite-8-PoE', 'usw_lite_16_poe': 'USW-Lite-16-PoE',
+      'usw_16_poe': 'USW-16-PoE', 'usw_24_poe': 'USW-24-PoE', 'usw_48_poe': 'USW-48-PoE',
+      'usw_pro_24_poe': 'USW-Pro-24-PoE', 'usw_pro_48_poe': 'USW-Pro-48-PoE',
+      'usw_enterprise_8_poe': 'USW-Enterprise-8-PoE', 'usw_enterprise_24_poe': 'USW-Enterprise-24-PoE',
+      'usw_aggregation': 'USW-Aggregation', 'usw_pro_aggregation': 'USW-Pro-Aggregation',
+      'us_8': 'US-8', 'us_8_60w': 'US-8-60W', 'us_8_150w': 'US-8-150W',
+      'us_16_150w': 'US-16-150W', 'us_24_250w': 'US-24-250W', 'us_48_500w': 'US-48-500W'
+    };
+    if (exact[pfx]) return exact[pfx];
+
+    // Generic fallback mapping
+    return pfx.split('_').map(w => {
+      const up = w.toUpperCase();
+      if (['POE', 'SE', 'LR', 'PRO', 'AC', 'HD', 'AP', 'USW', 'UDM', 'UAP', 'USG', 'IW', 'U6'].includes(up)) return up;
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    }).join('-');
+  }
+
   // ── Re-render live data ───────────────────────────────────────────
   _update() {
     if (!this._devEl || !this._hass) return;
@@ -606,7 +635,7 @@ class UnifiMonitorCard extends HTMLElement {
         bars.push(this._bar("TMP", "temp", Math.min(tmp, 100), tmpSev, `${tmp.toFixed(0)}°`));
 
       const baseUrl = cfg.image_base_url || "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/";
-      const imgUrl = `${baseUrl}${p}.png`;
+      const imgUrl = `${baseUrl}${this._formatImageName(p)}.png`;
 
       html += `
 <div class="row${dev.online ? " is-online" : " is-offline"}">
@@ -944,12 +973,13 @@ code {
   }
 
   _bind() {
-    this.shadowRoot.querySelectorAll("ha-textfield").forEach(el =>
-      el.addEventListener("change", e => this._onChange(e)));
-    this.shadowRoot.querySelectorAll("ha-switch").forEach(el =>
-      el.addEventListener("change", e => this._onChange(e)));
-    this.shadowRoot.querySelectorAll("ha-icon-picker").forEach(el =>
-      el.addEventListener("value-changed", e => this._onChange(e)));
+    this.shadowRoot.querySelectorAll("ha-textfield, ha-switch, ha-icon-picker").forEach(el => {
+      if (el.tagName === "HA-ICON-PICKER") {
+        el.addEventListener("value-changed", e => this._onChange(e));
+      } else {
+        el.addEventListener("change", e => this._onChange(e));
+      }
+    });
   }
 
   static get _MAP() {
@@ -1045,10 +1075,11 @@ code {
 
   _onChange(ev) {
     if (!this._config) return;
-    const el    = ev.target;
+    
+    // Aktuelles Target abgreifen (wichtig für ha-icon-picker Bug)
+    const el    = ev.currentTarget;
     let value   = el.value;
     
-    // Für ha-icon-picker und ha-switch
     if (ev.type === "value-changed") value = ev.detail.value;
     if (el.tagName === "HA-SWITCH") value = el.checked;
     
