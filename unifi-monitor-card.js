@@ -1,21 +1,43 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.19
+// UniFi Monitor Card  v0.0.20
 // ================================================================
 
-const UMC_VERSION = "0.0.19";
+const UMC_VERSION = "0.0.20";
 
+// Comprehensive list of all extracted Unifi Images from the repository
 const UNIFI_IMAGES = [
-  "UDM.png", "UDM-Pro.png", "UDM-SE.png", "UDR.png", "UX.png", "UXG-Lite.png", "UXG-Pro.png", "UXG-Max.png",
-  "USG.png", "USG-Pro-4.png",
-  "U6-Lite.png", "U6-LR.png", "U6-Pro.png", "U6-Enterprise.png", "U6-Mesh.png", "U6-Extender.png", "U6-IW.png", "U6-Enterprise-IW.png",
-  "U7-Pro.png", "U7-Pro-Max.png",
-  "UAP-AC-Lite.png", "UAP-AC-LR.png", "UAP-AC-Pro.png", "UAP-AC-M.png", "UAP-AC-M-Pro.png", "UAP-AC-IW.png", "UAP-nanoHD.png", "UAP-FlexHD.png", "UAP-BeaconHD.png",
-  "USW-Flex-Mini.png", "USW-Flex.png", "USW-Lite-8-PoE.png", "USW-Lite-16-PoE.png",
-  "USW-16-PoE.png", "USW-24-PoE.png", "USW-48-PoE.png", "USW-24.png", "USW-48.png",
-  "USW-Pro-8-PoE.png", "USW-Pro-24-PoE.png", "USW-Pro-48-PoE.png",
-  "USW-Enterprise-8-PoE.png", "USW-Enterprise-24-PoE.png", "USW-Enterprise-48-PoE.png",
-  "USW-Aggregation.png", "USW-Pro-Aggregation.png",
-  "US-8.png", "US-8-60W.png", "US-8-150W.png", "US-16-150W.png", "US-24-250W.png", "US-48-500W.png"
+  "AI-Key.png", "Building Bridge XG.png", "CK-Enterprise.png", "E7.png", "E7-Audience-US.png", "E7-Campus-US.png", 
+  "EAH-8.png", "ECS-24-PoE.png", "ECS-24S-PoE.png", "ECS-48-PoE.png", "ECS-48S-PoE.png", "ECS-Aggregation.png", 
+  "Enterprise Fortress Gateway.png", "ENVR.png", "U6-Enterprise.png", "U6-Enterprise-IW.png", "U6-Extender-US.png", 
+  "U6-IW.png", "U6-LR.png", "U6-Mesh.png", "U6-Mesh-Pro.png", "U6-PLUS.png", "U6-Pro.png", "U7-IW.png", "U7-Lite.png", 
+  "U7-Outdoor.png", "U7-Pro.png", "U7-Pro-Max.png", "U7-Pro-Outdoor-US.png", "U7-Pro-Wall.png", "U7-Pro-XG.png", 
+  "U7-Pro-XGS.png", "UA-Button.png", "UA-Card.png", "UACC-Chime-PoE.png", "UACC-Junction-Utility.png", "UACC-LRE.png", 
+  "UACC-Reader-JB.png", "UA-G2.png", "UA-G2-Pro.png", "UA-G3.png", "UA-G3-Flex.png", "UA-G3-Intercom.png", "UA-G3-Pro.png", 
+  "UA-Hub-Door.png", "UA-Hub-Door-Mini.png", "UA-Hub-Gate.png", "UA-Intercom.png", "UA-Intercom-Viewer.png", "UA-Pocket.png", 
+  "UA-Reader Lite.png", "UA-Rescue.png", "UA-Ultra.png", "UAP-AC-IW.png", "UAP-AC-LITE.png", "UAP-AC-LR.png", "UAP-AC-M.png", 
+  "UAP-AC-M-PRO.png", "UAP-AC-PRO.png", "UAP-IW-HD.png", "UBB.png", "UC-Cast-Lite.png", "UC-Cast-Pro.png", "UC-Display.png", 
+  "UC-EV-Station-Lite.png", "UC-EV-Station-Pro.png", "UCG-Fiber.png", "UCG-Max.png", "UCG-Ultra.png", "UCK-G2.png", 
+  "UCK-G2-PLUS.png", "UCK-G2-SSD.png", "UDB.png", "UDB-Pro.png", "UDB-Pro-Sector.png", "UDM-Pro.png", "UDM-Pro-Max.png", 
+  "UDM-SE.png", "UDR.png", "UDR7.png", "UDW.png", "UFP-Viewport.png", "UK-Ultra.png", "U-LTE.png", "U-LTE-Backup Pro.png", 
+  "UMR-Industrial.png", "UMR-Ultra-US.png", "UMR-US.png", "UNVR.png", "UNVR-Pro.png", "UP-AI-Port.png", "UP-Chime.png", 
+  "UP-FloodLight.png", "UPL-Amp.png", "UP-Sense.png", "UP-SuperLink.png", "US-8-60W.png", "US-8-150W.png", "USP-PDU-Pro.png", 
+  "USP-RPS.png", "USW-16-POE.png", "USW-24.png", "USW-24-POE.png", "USW-48.png", "USW-48-POE.png", "USW-Aggregation.png", 
+  "USW-Enterprise-8-PoE.png", "USW-Flex.png", "USW-Flex-2.5G-5.png", "USW-Flex-2.5G-8.png", "USW-Flex-2.5G-8-PoE.png", 
+  "USW-Flex-Mini.png", "USW-Flex-Utility.png", "USW-Flex-XG.png", "USW-Industrial.png", "USW-Lite-8-PoE.png", "USW-Lite-16-PoE.png", 
+  "USW-Mission-Critical.png", "USW-Pro-8-PoE.png", "USW-Pro-24.png", "USW-Pro-24-POE.png", "USW-Pro-48.png", "USW-Pro-48-POE.png", 
+  "USW-Pro-Aggregation.png", "USW-Pro-HD-24.png", "USW-Pro-HD-24-PoE.png", "USW-Pro-Max-16.png", "USW-Pro-Max-16-PoE.png", 
+  "USW-Pro-Max-24.png", "USW-Pro-Max-24-PoE.png", "USW-Pro-Max-48.png", "USW-Pro-Max-48-PoE.png", "USW-Pro-XG-10-PoE.png", 
+  "USW-Pro-XG-24-PoE.png", "USW-Pro-XG-48-PoE.png", "USW-Ultra.png", "USW-Ultra-60W.png", "USW-Ultra-210W.png", "US-XG-6POE.png", 
+  "UT-ATA.png", "UTP-G3-Touch-Enterprise.png", "UTP-G3-Touch-Pro.png", "UTP-G3-Touch-Wall.png", "UTP-TouchMax-US.png", "UTP-Touch-US.png", 
+  "UVC-AI-360.png", "UVC-AI-Bullet.png", "UVC-AI-Dome.png", "UVC-AI-DSLR.png", "UVC-AI-LPR.png", "UVC-AI-Pro.png", "UVC-AI-Theta.png", 
+  "UVC-AI-Theta-Audio.png", "UVC-AI-Theta-Hub.png", "UVC-AI-Theta-Lens.png", "UVC-AI-Theta-Lens-360.png", "UVC-AI-Theta-Lens-LD.png", 
+  "UVC-AI-Theta-Pro.png", "UVC-AI-Theta-ProLens50.png", "UVC-AI-Theta-ProLens110.png", "UVC-AI-Theta-ProLens360.png", "UVC-AI-Turret.png", 
+  "UVC-G3-FLEX.png", "UVC-G3-INS.png", "UVC-G4 Doorbell Pro.png", "UVC-G4-Bullet.png", "UVC-G4-DOME.png", "UVC-G4-INS.png", 
+  "UVC-G4-Pro.png", "UVC-G4-PTZ.png", "UVC-G5-Bullet.png", "UVC-G5-Dome.png", "UVC-G5-Dome-Ultra.png", "UVC-G5-Flex.png", "UVC-G5-Pro.png", 
+  "UVC-G5-PTZ.png", "UVC-G5-Turret-Ultra.png", "UVC-G6-Bullet.png", "UVC-G6-INS.png", "UVC-G6-Turret.png", "UWB-XG.png", "UX.png", 
+  "UX7.png", "UXG-Enterprise.png", "UXG-Fiber.png", "UXG-Lite.png", "UXG-Max.png", "UXG-Pro.png",
+  // Standard fallbacks just in case
+  "UDM.png", "USG.png", "USG-Pro-4.png"
 ];
 
 const UMC_DEFAULTS = {
@@ -320,11 +342,20 @@ class UnifiMonitorCard extends HTMLElement {
 
   _formatImageName(pfx) {
     let name = pfx.replace(/_/g, '-');
-    const exactMatches = { 'u6-ent': 'U6-Enterprise', 'u6-enterprise': 'U6-Enterprise', 'u6-ext': 'U6-Extender', 'uap-ac-m-pro': 'UAP-AC-M-Pro', 'uap-ac-m': 'UAP-AC-M' };
+    const exactMatches = { 
+        'u6-ent': 'U6-Enterprise', 'u6-enterprise': 'U6-Enterprise', 'u6-ext': 'U6-Extender', 
+        'uap-ac-m-pro': 'UAP-AC-M-PRO', 'uap-ac-m': 'UAP-AC-M', 'uap-ac-lite': 'UAP-AC-LITE', 
+        'uap-ac-pro': 'UAP-AC-PRO', 'uap-ac-lr': 'UAP-AC-LR' 
+    };
     if (exactMatches[name.toLowerCase()]) return exactMatches[name.toLowerCase()];
     name = name.replace(/\b(usw|uap|udm|udr|usg|u6|us|uxg|ux)\b/gi, match => match.toUpperCase());
     name = name.replace(/\b(ac|hd|iw|se|poe|pro|lite|lr|mesh|flex|mini|enterprise|aggregation|xg|max)\b/gi, match => {
-      const map = { 'ac':'AC', 'hd':'HD', 'iw':'IW', 'se':'SE', 'poe':'PoE', 'pro':'Pro', 'lite':'Lite', 'lr':'LR', 'mesh':'Mesh', 'flex':'Flex', 'mini':'Mini', 'enterprise':'Enterprise', 'aggregation':'Aggregation', 'xg':'XG', 'max':'Max' };
+      const map = { 
+          'ac':'AC', 'hd':'HD', 'iw':'IW', 'se':'SE', 'poe':'POE', // Switched poe to POE as many use POE in repo
+          'pro':'Pro', 'lite':'Lite', 'lr':'LR', 'mesh':'Mesh', 
+          'flex':'Flex', 'mini':'Mini', 'enterprise':'Enterprise', 
+          'aggregation':'Aggregation', 'xg':'XG', 'max':'Max' 
+      };
       return map[match.toLowerCase()] || match;
     });
     return name;
