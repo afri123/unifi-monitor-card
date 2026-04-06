@@ -1,8 +1,8 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.14
+// UniFi Monitor Card  v0.0.15
 // ================================================================
 
-const UMC_VERSION = "0.0.14";
+const UMC_VERSION = "0.0.15";
 
 const UMC_DEFAULTS = {
   title:             "Network Infrastructure",
@@ -28,6 +28,8 @@ const UMC_DEFAULTS = {
     accent_color:       "var(--primary-color, #2196f3)",
     // Typography
     font_family:        "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
+    title_font_family:  "inherit", 
+    title_text_transform: "uppercase", 
     title_font_size:    "12px", 
     title_color:        "var(--secondary-text-color)",
     title_icon_color:   "var(--primary-color, #2196f3)",
@@ -168,11 +170,12 @@ class UnifiMonitorCard extends HTMLElement {
 .header-left { display: flex; align-items: center; gap: 7px; }
 .header-icon { --mdc-icon-size: 16px; color: ${s.title_icon_color}; opacity: .9; }
 .card-title {
+  font-family:    ${s.title_font_family === 'inherit' ? s.font_family : s.title_font_family};
   font-size:      ${s.title_font_size};
   font-weight:    800;
   color:          ${s.title_color};
   letter-spacing: .12em;
-  text-transform: uppercase;
+  text-transform: ${s.title_text_transform};
 }
 .pills { display: flex; gap: 5px; }
 .pill {
@@ -195,11 +198,14 @@ class UnifiMonitorCard extends HTMLElement {
   border-radius: 10px;
   border:        1px solid transparent;
   padding:       ${c.compact_mode ? "10px 13px" : "13px 15px"};
-  transition:    background .15s, border-color .15s;
+  transition:    background-color 0.2s ease, border-color 0.2s ease;
   position:      relative;
   overflow:      hidden;
 }
-.row:hover { background: ${s.device_bg_hover}; border-color: rgba(128,128,128,.13); }
+.row:hover { 
+  background-color: ${s.device_bg_hover}; 
+  border-color: rgba(128,128,128,.13); 
+}
 /* Online accent stripe */
 .row::before {
   content:       '';
@@ -209,6 +215,7 @@ class UnifiMonitorCard extends HTMLElement {
   border-radius: 2px;
   background:    transparent;
   transition:    background .3s;
+  pointer-events: none; /* Prevents hover flickering */
 }
 .row.is-online::before  { background: ${s.icon_online_color}; }
 .row.is-offline { opacity: .55; }
@@ -232,7 +239,7 @@ class UnifiMonitorCard extends HTMLElement {
   position:      relative;
   margin-top:    1px;
 }
-.sicon ha-icon { --mdc-icon-size: 18px; }
+.sicon ha-icon { --mdc-icon-size: 18px; display: flex; }
 .sicon.is-online  { background: rgba(0,200,83,.09);  color: ${s.icon_online_color}; }
 .sicon.is-offline { background: rgba(255,23,68,.08); color: ${s.icon_offline_color}; }
 
@@ -254,6 +261,7 @@ class UnifiMonitorCard extends HTMLElement {
   background:    ${s.icon_online_color};
   animation:     umcDot 2.8s infinite ease-in-out;
   z-index: 2;
+  pointer-events: none;
 }
 @keyframes umcDot {
   0%   { box-shadow: 0 0 0 0   rgba(0,200,83,.6); }
@@ -299,6 +307,7 @@ class UnifiMonitorCard extends HTMLElement {
   background:     rgba(128,128,128,.15);
   color:          ${s.meta_color};
   text-transform: uppercase;
+  pointer-events: none;
 }
 
 .ip-tag {
@@ -361,7 +370,7 @@ class UnifiMonitorCard extends HTMLElement {
 }
 
 /* Meta chips */
-.meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+.meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; pointer-events: none; }
 .chip {
   display:     flex;
   align-items: center;
@@ -401,6 +410,7 @@ class UnifiMonitorCard extends HTMLElement {
   display:     flex;
   flex-direction: column;
   gap:         ${c.compact_mode ? "5px" : "6px"};
+  pointer-events: none; /* Prevents hover flickering */
 }
 .mrow {
   display:               grid;
@@ -497,33 +507,32 @@ class UnifiMonitorCard extends HTMLElement {
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Auto-format the HA internal prefix to the exact case required by the image repo
+  // Smart Regex Formatter to catch 99% of Unifi File Names automatically
   _formatImageName(pfx) {
-    // Known exact matches to compensate for repo case rules
-    const exact = {
-      'udm_pro': 'UDM-Pro', 'udm_se': 'UDM-SE', 'udm': 'UDM', 'udr': 'UDR', 'usg': 'USG',
-      'u6_pro': 'U6-Pro', 'u6_lite': 'U6-Lite', 'u6_lr': 'U6-LR', 'u6_ent': 'U6-Enterprise',
-      'u6_mesh': 'U6-Mesh', 'u6_iw': 'U6-IW', 'u6_extender': 'U6-Extender',
-      'uap_ac_pro': 'UAP-AC-Pro', 'uap_ac_lite': 'UAP-AC-Lite', 'uap_ac_lr': 'UAP-AC-LR',
-      'uap_ac_m': 'UAP-AC-M', 'uap_ac_m_pro': 'UAP-AC-M-Pro', 'uap_ac_iw': 'UAP-AC-IW',
-      'uap_flexhd': 'UAP-FlexHD', 'uap_beaconhd': 'UAP-BeaconHD', 'uap_nano': 'UAP-nanoHD',
-      'usw_flex_mini': 'USW-Flex-Mini', 'usw_flex': 'USW-Flex',
-      'usw_lite_8_poe': 'USW-Lite-8-PoE', 'usw_lite_16_poe': 'USW-Lite-16-PoE',
-      'usw_16_poe': 'USW-16-PoE', 'usw_24_poe': 'USW-24-PoE', 'usw_48_poe': 'USW-48-PoE',
-      'usw_pro_24_poe': 'USW-Pro-24-PoE', 'usw_pro_48_poe': 'USW-Pro-48-PoE',
-      'usw_enterprise_8_poe': 'USW-Enterprise-8-PoE', 'usw_enterprise_24_poe': 'USW-Enterprise-24-PoE',
-      'usw_aggregation': 'USW-Aggregation', 'usw_pro_aggregation': 'USW-Pro-Aggregation',
-      'us_8': 'US-8', 'us_8_60w': 'US-8-60W', 'us_8_150w': 'US-8-150W',
-      'us_16_150w': 'US-16-150W', 'us_24_250w': 'US-24-250W', 'us_48_500w': 'US-48-500W'
-    };
-    if (exact[pfx]) return exact[pfx];
+    let name = pfx.replace(/_/g, '-');
 
-    // Generic fallback mapping
-    return pfx.split('_').map(w => {
-      const up = w.toUpperCase();
-      if (['POE', 'SE', 'LR', 'PRO', 'AC', 'HD', 'AP', 'USW', 'UDM', 'UAP', 'USG', 'IW', 'U6'].includes(up)) return up;
-      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-    }).join('-');
+    // Known specific edge cases
+    const exactMatches = {
+      'u6-ent': 'U6-Enterprise',
+      'u6-enterprise': 'U6-Enterprise',
+      'u6-ext': 'U6-Extender',
+      'uap-ac-m-pro': 'UAP-AC-M-Pro',
+      'uap-ac-m': 'UAP-AC-M'
+    };
+    if (exactMatches[name.toLowerCase()]) return exactMatches[name.toLowerCase()];
+
+    // General pattern matching to Title Case / Upper Case
+    name = name.replace(/\b(usw|uap|udm|udr|usg|u6|us|uxg|ux)\b/gi, match => match.toUpperCase());
+    name = name.replace(/\b(ac|hd|iw|se|poe|pro|lite|lr|mesh|flex|mini|enterprise|aggregation|xg|max)\b/gi, match => {
+      const map = {
+        'ac':'AC', 'hd':'HD', 'iw':'IW', 'se':'SE', 'poe':'PoE',
+        'pro':'Pro', 'lite':'Lite', 'lr':'LR', 'mesh':'Mesh',
+        'flex':'Flex', 'mini':'Mini', 'enterprise':'Enterprise', 
+        'aggregation':'Aggregation', 'xg':'XG', 'max':'Max'
+      };
+      return map[match.toLowerCase()] || match;
+    });
+    return name;
   }
 
   // ── Re-render live data ───────────────────────────────────────────
@@ -637,15 +646,19 @@ class UnifiMonitorCard extends HTMLElement {
       const baseUrl = cfg.image_base_url || "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/";
       const imgUrl = `${baseUrl}${this._formatImageName(p)}.png`;
 
+      // Flackerfreie Bild Logik: Bild ist unsichtbar. Icon ist sichtbar. 
+      // onload -> Mache Bild sichtbar, Icon unsichtbar. 
+      // onerror -> Verwerfe den Fehler leise, Icon bleibt.
+      const imageHtml = cfg.show_real_images 
+        ? `<img class="real-img" src="${imgUrl}" onload="this.style.display='block'; this.nextElementSibling.style.display='none';" style="display:none;" />
+           <ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`
+        : `<ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`;
+
       html += `
 <div class="row${dev.online ? " is-online" : " is-offline"}">
   <div class="top">
     <div class="sicon ${dev.online ? "is-online" : "is-offline"}">
-      ${cfg.show_real_images 
-        ? `<img class="real-img" src="${imgUrl}" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" />
-           <ha-icon icon="${dev.icon || "mdi:router-network"}" style="display:none;"></ha-icon>`
-        : `<ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`
-      }
+      ${imageHtml}
       ${dev.online ? '<span class="dot"></span>' : ""}
     </div>
     <div class="info">
@@ -888,8 +901,13 @@ code {
 <details>
   <summary><ha-icon icon="mdi:format-text"></ha-icon>Typography</summary>
   <div class="content">
-    <ha-textfield id="f_font_family" label="Global Font Family"></ha-textfield>
-    <p class="hint">e.g. <code>var(--primary-font-family)</code>, <code>Roboto</code>, or <code>sans-serif</code>.</p>
+    <ha-textfield id="f_font_family" label="Global Font Family (e.g. Roboto)"></ha-textfield>
+    
+    <div class="row2">
+      <ha-textfield id="f_title_font_family" label="Title Font (e.g. inherit)"></ha-textfield>
+      <ha-textfield id="f_title_text_transform" label="Title Transform (none, uppercase)"></ha-textfield>
+    </div>
+
     <div class="row2">
       <ha-textfield id="f_title_font_size"   label="Title size"></ha-textfield>
       <ha-textfield id="f_title_color"       label="Title color"></ha-textfield>
@@ -1002,6 +1020,8 @@ code {
       f_card_shadow:         ["style", "card_shadow"],
       f_accent_color:        ["style", "accent_color"],
       f_font_family:         ["style", "font_family"],
+      f_title_font_family:   ["style", "title_font_family"],
+      f_title_text_transform:["style", "title_text_transform"],
       f_title_font_size:     ["style", "title_font_size"],
       f_title_color:         ["style", "title_color"],
       f_title_icon_color:    ["style", "title_icon_color"],
@@ -1044,12 +1064,15 @@ code {
     chk("sw_ip",                c.show_ip            !== false);
     chk("sw_real_images",       c.show_real_images   !== false);
     set("f_image_base_url",     c.image_base_url || "");
+    
     set("f_card_bg",            s.card_bg);
     set("f_card_border_radius", s.card_border_radius);
     set("f_card_padding",       s.card_padding);
     set("f_card_shadow",        s.card_shadow);
     set("f_accent_color",       s.accent_color);
     set("f_font_family",        s.font_family);
+    set("f_title_font_family",  s.title_font_family);
+    set("f_title_text_transform", s.title_text_transform);
     set("f_title_font_size",    s.title_font_size);
     set("f_title_color",        s.title_color);
     set("f_title_icon_color",   s.title_icon_color);
@@ -1076,7 +1099,6 @@ code {
   _onChange(ev) {
     if (!this._config) return;
     
-    // Aktuelles Target abgreifen (wichtig für ha-icon-picker Bug)
     const el    = ev.currentTarget;
     let value   = el.value;
     
