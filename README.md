@@ -17,13 +17,13 @@ It automatically matches related entities (CPU, RAM, Temperature, Update, and Re
 ## ✨ Features
 
 - **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code.
-- **📸 Real Device Images:** Automatically loads high-resolution, accurate hardware images for your specific UniFi devices (Credit to the [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository). Includes a built-in dropdown picker to manually override images if needed!
+- **📸 Real Device Images (Local Setup):** Loads high-resolution, accurate hardware images for your specific UniFi devices. Hosted locally on your Home Assistant instance for zero-latency loading, complete offline capability, and no CORS browser blocking! Includes a built-in dropdown picker to manually override images.
 - **⚡ Smart Rendering Engine:** Built with a custom DOM-diffing algorithm. Values update instantly in real-time without the card flickering or losing hover states.
 - **🖥️ Full Visual Editor:** Configure titles, typography (fonts, uppercase/lowercase), behaviors, and all colors directly through the Home Assistant UI. No YAML required!
 - **📊 Comprehensive Metrics:** Automatically pulls CPU, Memory, Temperature, Uptime, Connected Clients, IP Addresses, and Firmware Updates.
 - **📱 Compact Mode:** Toggleable denser layout for mobile screens or tight dashboards.
 - **Interactive:** One-click device restarts and quick update installations directly from the dashboard.
-
+- 
 ## ⚙️ Installation
 
 ### HACS (Recommended)
@@ -42,6 +42,17 @@ It automatically matches related entities (CPU, RAM, Temperature, Update, and Re
 4. Add a new resource:
    - URL: `/local/unifi-monitor-card.js`
    - Resource Type: `JavaScript Module`
+  
+## 🖼️ Local Image Setup (Required for Real Images)
+
+To completely avoid browser CORS (Cross-Origin Resource Sharing) blocks and to guarantee lightning-fast, offline-capable rendering, this card fetches images from your local Home Assistant storage.
+
+1. Download the high-resolution `.png` device images (Credit for the images goes to the excellent [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository).
+2. Access your Home Assistant files (e.g., via Studio Code Server or Samba) and navigate to your `config/www` directory. 
+   *(Note: The `www` folder maps to `/local/` in the browser).*
+3. Create a new subfolder named `unifi` so the path looks like this: `/config/www/unifi/`.
+4. Drop your downloaded `.png` files into this folder (e.g., `/config/www/unifi/UDM-Pro.png`).
+5. **Important:** Hard-refresh your Home Assistant dashboard and clear your browser cache (e.g., `CTRL + F5` or `CMD + SHIFT + R`) to load the new assets.
 
 ## 🛠️ Configuration
 
@@ -60,13 +71,14 @@ If you want to rename specific devices, change their icons, or only show a speci
 ```yaml
 type: custom:unifi-monitor-card
 title: Network Infrastructure
-devices:
-  - prefix: udm_se
-    name: UDM Special Edition
-    icon: mdi:router-network
-  - prefix: usw_pro_48_poe
-    name: Main Switch 48-PoE
-    icon: mdi:switch
+compact_mode: true
+show_real_images: true
+name_overrides:
+  udm_se: "Main Dream Machine"
+  usw_pro_48_poe: "Core Switch"
+image_overrides:
+  udm_se: "UDM-SE.png"
+  usw_pro_48_poe: "USW-Pro-48-PoE.png"
 ```
 
 ### Configuration Variables
@@ -82,7 +94,7 @@ All visual parameters can be set via the UI Editor. For YAML power users, here a
 | `compact_mode` | boolean | `false` | Reduces padding and gap sizes for a denser look. |
 | `sort_online_first` | boolean | `true` | Keeps online devices at the top of the list. |
 | `show_real_images` | boolean | `true` | Loads hardware PNGs instead of MDI icons. |
-| `image_base_url` | string | *GitHub Repo URL* | The source URL for the real images. |
+| `image_base_url` | string | `/local/unifi/` | The local directory path for the real images. |
 | `show_version` | boolean | `true` | Show firmware version chip. |
 | `show_temp` | boolean | `true` | Show temperature progress bar. |
 | `show_uptime` | boolean | `true` | Show uptime chip. |
@@ -109,7 +121,7 @@ style:
 Since styling is now natively supported and fully customizable via the Visual Editor (including typography, colors, and backgrounds), you rarely need [card-mod](https://github.com/thomasloven/lovelace-card-mod). The built-in `style` configuration uses standard Home Assistant CSS variables (`var(--ha-card-background)`) out of the box, ensuring perfect integration with your current theme (Light/Dark mode).
 
 ## 🙏 Credits
-- **Hardware Images:** High-quality UniFi device images are pulled from the excellent [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository.
+- **Hardware Images:** High-quality UniFi device images are originally curated by the excellent [cyberconsecurity/Unifi](https://github.com/cyberconsecurity/Unifi) repository.
 
 ## 🤝 Contributing
 Feel free to open an issue or submit a pull request if you have ideas for new features or find a bug!
