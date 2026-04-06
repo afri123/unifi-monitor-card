@@ -1,16 +1,18 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.12
+// UniFi Monitor Card  v0.0.13
 // ================================================================
 
-const UMC_VERSION = "0.0.12";
+const UMC_VERSION = "0.0.13";
 
 const UMC_DEFAULTS = {
   title:             "Network Infrastructure",
+  title_icon:        "mdi:lan",
   auto_discover:     true,
   show_version:      true,
   show_temp:         true,
   show_uptime:       true,
   show_clients:      true,
+  show_ip:           true,
   compact_mode:      false,
   sort_online_first: true,
   name_overrides:    {},
@@ -24,12 +26,13 @@ const UMC_DEFAULTS = {
     accent_color:       "var(--primary-color, #2196f3)",
     // Typography
     font_family:        "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    title_font_size:    "12px", // Increased for better readability
+    title_font_size:    "12px", 
     title_color:        "var(--secondary-text-color)",
+    title_icon_color:   "var(--primary-color, #2196f3)",
     // Device rows
     device_bg:          "rgba(128,128,128,.05)",
     device_bg_hover:    "rgba(128,128,128,.10)",
-    device_name_size:   "15px", // Increased for better readability
+    device_name_size:   "15px", 
     device_name_color:  "var(--primary-text-color)",
     // Meta / secondary text
     meta_color:         "var(--disabled-text-color, #9e9e9e)",
@@ -88,11 +91,13 @@ class UnifiMonitorCard extends HTMLElement {
   static getStubConfig() {
     return {
       title:         "Network Infrastructure",
+      title_icon:    "mdi:lan",
       auto_discover: true,
       show_version:  true,
       show_temp:     true,
       show_uptime:   true,
       show_clients:  true,
+      show_ip:       true,
     };
   }
 
@@ -158,7 +163,7 @@ class UnifiMonitorCard extends HTMLElement {
   border-bottom:   1px solid rgba(128,128,128,.10);
 }
 .header-left { display: flex; align-items: center; gap: 7px; }
-.header-icon { --mdc-icon-size: 14px; color: ${s.accent_color}; opacity: .85; }
+.header-icon { --mdc-icon-size: 16px; color: ${s.title_icon_color}; opacity: .9; }
 .card-title {
   font-size:      ${s.title_font_size};
   font-weight:    800;
@@ -279,6 +284,17 @@ class UnifiMonitorCard extends HTMLElement {
   background:     rgba(128,128,128,.15);
   color:          ${s.meta_color};
   text-transform: uppercase;
+}
+
+.ip-tag {
+  font-size:      9px;
+  font-weight:    600;
+  letter-spacing: .04em;
+  padding:        2px 5px;
+  border-radius:  4px;
+  background:     rgba(128,128,128,.08);
+  color:          ${s.meta_color};
+  font-family:    monospace;
 }
 
 .client-badge {
@@ -426,7 +442,7 @@ class UnifiMonitorCard extends HTMLElement {
 <div class="card">
   <div class="header" id="hdr" style="display:none">
     <div class="header-left">
-      <ha-icon class="header-icon" icon="mdi:lan"></ha-icon>
+      <ha-icon class="header-icon" id="ttl-icon" icon="mdi:lan"></ha-icon>
       <span class="card-title" id="ttl"></span>
     </div>
     <div class="pills" id="pls"></div>
@@ -436,8 +452,8 @@ class UnifiMonitorCard extends HTMLElement {
 
     this._hdrEl = this.shadowRoot.getElementById("hdr");
     this._ttlEl = this.shadowRoot.getElementById("ttl");
-    this._plsEl = this.shadowRoot.getElementById("pls");
     this._devEl = this.shadowRoot.getElementById("dev");
+    this._plsEl = this.shadowRoot.getElementById("pls");
   }
 
   // ── Discover UniFi devices via entity pattern matching ───────────
@@ -472,8 +488,9 @@ class UnifiMonitorCard extends HTMLElement {
     const cfg = this._config;
 
     // Header
-    if (cfg.title) {
-      this._ttlEl.textContent   = cfg.title;
+    if (cfg.title || cfg.title_icon) {
+      this._ttlEl.textContent   = cfg.title || "";
+      this.shadowRoot.getElementById("ttl-icon").icon = cfg.title_icon || "mdi:lan";
       this._hdrEl.style.display = "flex";
     } else {
       this._hdrEl.style.display = "none";
@@ -520,9 +537,6 @@ class UnifiMonitorCard extends HTMLElement {
       const tmpEnt = this._hass.states[`sensor.${p}_temperature`]
                   || this._hass.states[`sensor.${p}_cpu_temperature`];
       const uptEnt = this._hass.states[`sensor.${p}_uptime`];
-      const cliEnt = this._hass.states[`sensor.${p}_clients`]
-                  || this._hass.states[`sensor.${p}_num_sta`]
-                  || this._hass.states[`sensor.${p}_wlan_num_sta`];
       const updEnt = this._hass.states[`update.${p}`];
       const hasRst = !!this._hass.states[`button.${p}_restart`];
 
@@ -531,11 +545,30 @@ class UnifiMonitorCard extends HTMLElement {
                    || updEnt?.attributes?.latest_version
                    || null;
 
+      // Smarte IP Extraktion (aus friendly_name String oder dediziertem Sensor)
+      const rawName = cpuEnt?.attributes?.friendly_name || p;
+      const ipMatch = rawName.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
+      const ipAddr  = this._hass.states[`sensor.${p}_ip_address`]?.state || (ipMatch ? ipMatch[0] : null);
+
+      // Smarte Client Extraktion (berücksichtigt verschiedene UniFi-Sensornamen)
+      let cli = null;
+      const cliEnt = this._hass.states[`sensor.${p}_clients`] 
+                  || this._hass.states[`sensor.${p}_users`] 
+                  || this._hass.states[`sensor.${p}_num_sta`];
+      if (cliEnt && !isNaN(parseInt(cliEnt.state, 10))) {
+        cli = parseInt(cliEnt.state, 10);
+      } else {
+        const wless = this._hass.states[`sensor.${p}_wireless_clients`];
+        const wired = this._hass.states[`sensor.${p}_wired_clients`];
+        if (wless || wired) {
+          cli = (wless ? parseInt(wless.state, 10) || 0 : 0) + (wired ? parseInt(wired.state, 10) || 0 : 0);
+        }
+      }
+
       const cpu = cpuEnt ? parseFloat(cpuEnt.state) : null;
       const ram = ramEnt ? parseFloat(ramEnt.state) : null;
       const tmp = tmpEnt ? parseFloat(tmpEnt.state) : null;
       const upt = uptEnt ? _uptime(uptEnt.state)    : null;
-      const cli = cliEnt ? parseInt(cliEnt.state, 10) : null;
 
       const cpuSev = cpu != null ? _sev(cpu)           : "";
       const ramSev = ram != null ? _sev(ram)           : "";
@@ -569,6 +602,7 @@ class UnifiMonitorCard extends HTMLElement {
         <div class="name-row">
           <span class="name" onclick="this.getRootNode().host._openDetails('${p}')">${nom}</span>
           <span class="type-tag">${typeLabel}</span>
+          ${(cfg.show_ip && ipAddr) ? `<span class="ip-tag">${ipAddr}</span>` : ""}
           ${!dev.online ? `<span class="offline-tag">offline</span>` : ""}
           ${hasUpd
             ? `<span class="badge" onclick="this.getRootNode().host._triggerUpdate('${p}')">
@@ -576,7 +610,7 @@ class UnifiMonitorCard extends HTMLElement {
                </span>`
             : ""}
         </div>
-        ${(cfg.show_clients && cli != null && !isNaN(cli)) 
+        ${(cfg.show_clients && cli != null) 
           ? `<div class="client-badge" title="Connected Clients">
                <ha-icon icon="mdi:account-multiple"></ha-icon> ${cli}
              </div>` 
@@ -736,7 +770,10 @@ code {
 <details open>
   <summary><ha-icon icon="mdi:cog-outline"></ha-icon>General</summary>
   <div class="content">
-    <ha-textfield id="f_title" label="Card title"></ha-textfield>
+    <div class="row2">
+      <ha-textfield id="f_title" label="Card title"></ha-textfield>
+      <ha-textfield id="f_title_icon" label="Title icon (e.g. mdi:lan)"></ha-textfield>
+    </div>
     <div class="sw-row">
       <div><div class="sw-label">Auto-discover devices</div><div class="sw-sub">Scan HA for UniFi entities</div></div>
       <ha-switch id="sw_auto"></ha-switch>
@@ -771,6 +808,10 @@ code {
       <div class="sw-label">Connected clients (Badge)</div>
       <ha-switch id="sw_clients"></ha-switch>
     </div>
+    <div class="sw-row">
+      <div class="sw-label">IP Address</div>
+      <ha-switch id="sw_ip"></ha-switch>
+    </div>
   </div>
 </details>
 
@@ -797,6 +838,7 @@ code {
       <ha-textfield id="f_title_font_size"   label="Title size"></ha-textfield>
       <ha-textfield id="f_title_color"       label="Title color"></ha-textfield>
     </div>
+    <ha-textfield id="f_title_icon_color"  label="Title icon color"></ha-textfield>
     <div class="row2">
       <ha-textfield id="f_device_name_size"  label="Name size"></ha-textfield>
       <ha-textfield id="f_device_name_color" label="Name color"></ha-textfield>
@@ -884,6 +926,7 @@ code {
   static get _MAP() {
     return {
       f_title:               ["title"],
+      f_title_icon:          ["title_icon"],
       sw_auto:               ["auto_discover"],
       sw_sort:               ["sort_online_first"],
       sw_compact:            ["compact_mode"],
@@ -891,6 +934,7 @@ code {
       sw_temp:               ["show_temp"],
       sw_uptime:             ["show_uptime"],
       sw_clients:            ["show_clients"],
+      sw_ip:                 ["show_ip"],
       f_card_bg:             ["style", "card_bg"],
       f_card_border_radius:  ["style", "card_border_radius"],
       f_card_padding:        ["style", "card_padding"],
@@ -899,6 +943,7 @@ code {
       f_font_family:         ["style", "font_family"],
       f_title_font_size:     ["style", "title_font_size"],
       f_title_color:         ["style", "title_color"],
+      f_title_icon_color:    ["style", "title_icon_color"],
       f_device_name_size:    ["style", "device_name_size"],
       f_device_name_color:   ["style", "device_name_color"],
       f_meta_color:          ["style", "meta_color"],
@@ -927,6 +972,7 @@ code {
     };
 
     set("f_title",              c.title || "");
+    set("f_title_icon",         c.title_icon || "");
     chk("sw_auto",              c.auto_discover      !== false);
     chk("sw_sort",              c.sort_online_first  !== false);
     chk("sw_compact",           !!c.compact_mode);
@@ -934,6 +980,7 @@ code {
     chk("sw_temp",              c.show_temp          !== false);
     chk("sw_uptime",            c.show_uptime        !== false);
     chk("sw_clients",           c.show_clients       !== false);
+    chk("sw_ip",                c.show_ip            !== false);
     set("f_card_bg",            s.card_bg);
     set("f_card_border_radius", s.card_border_radius);
     set("f_card_padding",       s.card_padding);
@@ -942,6 +989,7 @@ code {
     set("f_font_family",        s.font_family);
     set("f_title_font_size",    s.title_font_size);
     set("f_title_color",        s.title_color);
+    set("f_title_icon_color",   s.title_icon_color);
     set("f_device_name_size",   s.device_name_size);
     set("f_device_name_color",  s.device_name_color);
     set("f_meta_color",         s.meta_color);
