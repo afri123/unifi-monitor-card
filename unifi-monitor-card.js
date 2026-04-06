@@ -1,8 +1,8 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.15
+// UniFi Monitor Card  v0.0.16
 // ================================================================
 
-const UMC_VERSION = "0.0.15";
+const UMC_VERSION = "0.0.16";
 
 const UMC_DEFAULTS = {
   title:             "Network Infrastructure",
@@ -18,6 +18,7 @@ const UMC_DEFAULTS = {
   compact_mode:      false,
   sort_online_first: true,
   name_overrides:    {},
+  image_overrides:   {}, // New: Manual Image assignment
   style: {
     // Card container
     card_bg:            "var(--ha-card-background, var(--card-background-color, #fff))",
@@ -52,9 +53,10 @@ const UMC_DEFAULTS = {
 };
 
 function _mergeConfig(config) {
-  const out          = Object.assign({}, UMC_DEFAULTS, config);
-  out.style          = Object.assign({}, UMC_DEFAULTS.style, config.style || {});
-  out.name_overrides = Object.assign({}, config.name_overrides || {});
+  const out           = Object.assign({}, UMC_DEFAULTS, config);
+  out.style           = Object.assign({}, UMC_DEFAULTS.style, config.style || {});
+  out.name_overrides  = Object.assign({}, config.name_overrides || {});
+  out.image_overrides = Object.assign({}, config.image_overrides || {});
   return out;
 }
 
@@ -201,6 +203,7 @@ class UnifiMonitorCard extends HTMLElement {
   transition:    background-color 0.2s ease, border-color 0.2s ease;
   position:      relative;
   overflow:      hidden;
+  transform:     translateZ(0); 
 }
 .row:hover { 
   background-color: ${s.device_bg_hover}; 
@@ -215,7 +218,7 @@ class UnifiMonitorCard extends HTMLElement {
   border-radius: 2px;
   background:    transparent;
   transition:    background .3s;
-  pointer-events: none; /* Prevents hover flickering */
+  pointer-events: none;
 }
 .row.is-online::before  { background: ${s.icon_online_color}; }
 .row.is-offline { opacity: .55; }
@@ -223,14 +226,14 @@ class UnifiMonitorCard extends HTMLElement {
 /* ── Top grid: icon · info · actions ────────────────────── */
 .top {
   display:               grid;
-  grid-template-columns: 34px 1fr auto;
+  grid-template-columns: 36px 1fr auto;
   align-items:           start;
   gap:                   11px;
 }
 
 /* ── Status icon & Real Images ────────────────────────────── */
 .sicon {
-  width: 34px; height: 34px;
+  width: 36px; height: 36px;
   border-radius: 8px;
   display:       flex;
   align-items:   center;
@@ -238,34 +241,47 @@ class UnifiMonitorCard extends HTMLElement {
   flex-shrink:   0;
   position:      relative;
   margin-top:    1px;
+  background:    rgba(128,128,128,.04);
 }
-.sicon ha-icon { --mdc-icon-size: 18px; display: flex; }
-.sicon.is-online  { background: rgba(0,200,83,.09);  color: ${s.icon_online_color}; }
-.sicon.is-offline { background: rgba(255,23,68,.08); color: ${s.icon_offline_color}; }
+.sicon ha-icon { --mdc-icon-size: 20px; display: flex; color: ${s.meta_color}; }
+.row.is-online .sicon ha-icon { color: ${s.icon_online_color}; opacity: 0.8; }
+.row.is-offline .sicon ha-icon { color: ${s.icon_offline_color}; opacity: 0.8; }
 
 .real-img {
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   object-fit: contain;
   transition: filter 0.3s;
+  display: none;
+  z-index: 1;
 }
 .row.is-offline .real-img {
-  filter: grayscale(100%) opacity(60%);
+  filter: grayscale(100%) opacity(70%);
 }
 
 .dot {
   position:      absolute;
-  bottom: 3px; right: 3px;
-  width: 6px; height: 6px;
+  bottom: -2px; right: -2px;
+  width: 10px; height: 10px;
   border-radius: 50%;
+  border: 2px solid ${s.device_bg}; /* Creates cutout effect */
+  z-index: 3;
+  pointer-events: none;
+  transition: border-color 0.2s ease;
+}
+.row:hover .dot {
+  border-color: ${s.device_bg_hover};
+}
+.dot.on {
   background:    ${s.icon_online_color};
   animation:     umcDot 2.8s infinite ease-in-out;
-  z-index: 2;
-  pointer-events: none;
+}
+.dot.off {
+  background:    ${s.icon_offline_color};
 }
 @keyframes umcDot {
   0%   { box-shadow: 0 0 0 0   rgba(0,200,83,.6); }
-  60%  { box-shadow: 0 0 0 5px rgba(0,200,83,0);  }
+  60%  { box-shadow: 0 0 0 4px rgba(0,200,83,0);  }
   100% { box-shadow: 0 0 0 0   rgba(0,200,83,0);  }
 }
 
@@ -410,7 +426,7 @@ class UnifiMonitorCard extends HTMLElement {
   display:     flex;
   flex-direction: column;
   gap:         ${c.compact_mode ? "5px" : "6px"};
-  pointer-events: none; /* Prevents hover flickering */
+  pointer-events: none;
 }
 .mrow {
   display:               grid;
@@ -507,21 +523,15 @@ class UnifiMonitorCard extends HTMLElement {
     return out.sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Smart Regex Formatter to catch 99% of Unifi File Names automatically
+  // Smart Regex Formatter (Used as fallback if no manual override is given)
   _formatImageName(pfx) {
     let name = pfx.replace(/_/g, '-');
-
-    // Known specific edge cases
     const exactMatches = {
-      'u6-ent': 'U6-Enterprise',
-      'u6-enterprise': 'U6-Enterprise',
-      'u6-ext': 'U6-Extender',
-      'uap-ac-m-pro': 'UAP-AC-M-Pro',
-      'uap-ac-m': 'UAP-AC-M'
+      'u6-ent': 'U6-Enterprise', 'u6-enterprise': 'U6-Enterprise',
+      'u6-ext': 'U6-Extender', 'uap-ac-m-pro': 'UAP-AC-M-Pro', 'uap-ac-m': 'UAP-AC-M'
     };
     if (exactMatches[name.toLowerCase()]) return exactMatches[name.toLowerCase()];
 
-    // General pattern matching to Title Case / Upper Case
     name = name.replace(/\b(usw|uap|udm|udr|usg|u6|us|uxg|ux)\b/gi, match => match.toUpperCase());
     name = name.replace(/\b(ac|hd|iw|se|poe|pro|lite|lr|mesh|flex|mini|enterprise|aggregation|xg|max)\b/gi, match => {
       const map = {
@@ -583,6 +593,7 @@ class UnifiMonitorCard extends HTMLElement {
     for (const dev of devices) {
       const p   = dev.prefix;
       const nom = cfg.name_overrides[p] || dev.name || p;
+      const manualImg = cfg.image_overrides[p]; // Get manual image if configured
       const typeLabel = dev.type_label || "DEVICE";
 
       const cpuEnt = this._hass.states[`sensor.${p}_cpu_utilization`];
@@ -643,23 +654,26 @@ class UnifiMonitorCard extends HTMLElement {
       if (cfg.show_temp && tmp != null && !isNaN(tmp))
         bars.push(this._bar("TMP", "temp", Math.min(tmp, 100), tmpSev, `${tmp.toFixed(0)}°`));
 
+      // Image Resolution Logic (Manual Override vs Auto)
       const baseUrl = cfg.image_base_url || "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/";
-      const imgUrl = `${baseUrl}${this._formatImageName(p)}.png`;
+      let imgUrl = "";
+      if (manualImg) {
+        imgUrl = manualImg.startsWith("http") ? manualImg : `${baseUrl}${manualImg}`;
+      } else {
+        imgUrl = `${baseUrl}${this._formatImageName(p)}.png`;
+      }
 
-      // Flackerfreie Bild Logik: Bild ist unsichtbar. Icon ist sichtbar. 
-      // onload -> Mache Bild sichtbar, Icon unsichtbar. 
-      // onerror -> Verwerfe den Fehler leise, Icon bleibt.
       const imageHtml = cfg.show_real_images 
-        ? `<img class="real-img" src="${imgUrl}" onload="this.style.display='block'; this.nextElementSibling.style.display='none';" style="display:none;" />
+        ? `<img class="real-img" src="${imgUrl}" onload="this.style.display='block'; this.nextElementSibling.style.display='none';" onerror="this.style.display='none'; this.nextElementSibling.style.display='block';" style="display:none;" />
            <ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`
         : `<ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>`;
 
       html += `
 <div class="row${dev.online ? " is-online" : " is-offline"}">
   <div class="top">
-    <div class="sicon ${dev.online ? "is-online" : "is-offline"}">
+    <div class="sicon">
       ${imageHtml}
-      ${dev.online ? '<span class="dot"></span>' : ""}
+      <span class="dot ${dev.online ? 'on' : 'off'}"></span>
     </div>
     <div class="info">
       <div class="info-header">
@@ -739,10 +753,6 @@ class UnifiMonitorCard extends HTMLElement {
 
 // ================================================================
 // EDITOR
-// Renders the DOM exactly once (_build).
-// Every subsequent setConfig() call only pushes new values into
-// the existing elements (_sync) — so accordions stay open and
-// switches do not snap back.
 // ================================================================
 class UnifiMonitorCardEditor extends HTMLElement {
   constructor() {
@@ -764,7 +774,6 @@ class UnifiMonitorCardEditor extends HTMLElement {
     if (this._config && !this._built) this._build();
   }
 
-  // ── Build editor DOM once ─────────────────────────────────────────
   _build() {
     if (this._built) return;
     this._built = true;
@@ -888,7 +897,6 @@ code {
   <summary><ha-icon icon="mdi:palette-outline"></ha-icon>Card Styling</summary>
   <div class="content">
     <ha-textfield id="f_card_bg" label="Background"></ha-textfield>
-    <p class="hint">Any CSS value: <code>#1c1c1e</code> · <code>rgba(255,255,255,.9)</code> · <code>var(--ha-card-background)</code></p>
     <div class="row2">
       <ha-textfield id="f_card_border_radius" label="Border radius"></ha-textfield>
       <ha-textfield id="f_card_padding"       label="Padding"></ha-textfield>
@@ -901,13 +909,11 @@ code {
 <details>
   <summary><ha-icon icon="mdi:format-text"></ha-icon>Typography</summary>
   <div class="content">
-    <ha-textfield id="f_font_family" label="Global Font Family (e.g. Roboto)"></ha-textfield>
-    
+    <ha-textfield id="f_font_family" label="Global Font Family"></ha-textfield>
     <div class="row2">
       <ha-textfield id="f_title_font_family" label="Title Font (e.g. inherit)"></ha-textfield>
       <ha-textfield id="f_title_text_transform" label="Title Transform (none, uppercase)"></ha-textfield>
     </div>
-
     <div class="row2">
       <ha-textfield id="f_title_font_size"   label="Title size"></ha-textfield>
       <ha-textfield id="f_title_color"       label="Title color"></ha-textfield>
@@ -917,7 +923,7 @@ code {
       <ha-textfield id="f_device_name_size"  label="Name size"></ha-textfield>
       <ha-textfield id="f_device_name_color" label="Name color"></ha-textfield>
     </div>
-    <ha-textfield id="f_meta_color" label="Meta / secondary text color"></ha-textfield>
+    <ha-textfield id="f_meta_color" label="Meta text color"></ha-textfield>
   </div>
 </details>
 
@@ -946,18 +952,18 @@ code {
 </details>
 
 <details>
-  <summary><ha-icon icon="mdi:rename-outline"></ha-icon>Device Name Aliases</summary>
+  <summary><ha-icon icon="mdi:cellphone-link"></ha-icon>Device Overrides</summary>
   <div class="content" id="alias-list">
-    <p class="hint">Override the auto-discovered display name for each device.</p>
+    <p class="hint">Override the display name or manually set the image filename (e.g. <code>U6-Pro.png</code>). Leave image blank to use auto-discovery.</p>
   </div>
 </details>`;
 
-    this._buildAliases();
+    this._buildOverridesList();
     this._sync();
     this._bind();
   }
 
-  _buildAliases() {
+  _buildOverridesList() {
     const list = this.shadowRoot.getElementById("alias-list");
     if (!list || !this._hass) return;
     const hint = list.querySelector("p");
@@ -979,25 +985,62 @@ code {
     }
 
     for (const pfx of prefixes) {
-      const tf = document.createElement("ha-textfield");
-      tf.style.width        = "100%";
-      tf.style.marginBottom = "6px";
-      tf.label              = `Alias for: ${pfx}`;
-      tf.value              = (this._config.name_overrides || {})[pfx] || "";
-      tf.dataset.aliasPfx   = pfx;
-      tf.addEventListener("change", e => this._onChange(e));
-      list.appendChild(tf);
+      const wrapper = document.createElement("div");
+      wrapper.style.display = "flex";
+      wrapper.style.gap = "8px";
+      wrapper.style.marginBottom = "10px";
+
+      const tfAlias = document.createElement("ha-textfield");
+      tfAlias.style.flex = "1";
+      tfAlias.label = `Alias: ${pfx}`;
+      tfAlias.value = (this._config.name_overrides || {})[pfx] || "";
+      tfAlias.dataset.pfx = pfx;
+      tfAlias.dataset.otype = "name";
+      tfAlias.addEventListener("change", e => this._onChangeOverride(e));
+
+      const tfImg = document.createElement("ha-textfield");
+      tfImg.style.flex = "1";
+      tfImg.label = `Image (e.g. U6.png)`;
+      tfImg.value = (this._config.image_overrides || {})[pfx] || "";
+      tfImg.dataset.pfx = pfx;
+      tfImg.dataset.otype = "image";
+      tfImg.addEventListener("change", e => this._onChangeOverride(e));
+
+      wrapper.appendChild(tfAlias);
+      wrapper.appendChild(tfImg);
+      list.appendChild(wrapper);
     }
   }
 
   _bind() {
     this.shadowRoot.querySelectorAll("ha-textfield, ha-switch, ha-icon-picker").forEach(el => {
-      if (el.tagName === "HA-ICON-PICKER") {
-        el.addEventListener("value-changed", e => this._onChange(e));
-      } else {
-        el.addEventListener("change", e => this._onChange(e));
+      // Don't bind the override fields here, they are bound during creation
+      if (!el.dataset.otype) {
+        if (el.tagName === "HA-ICON-PICKER") {
+          el.addEventListener("value-changed", e => this._onChange(e));
+        } else {
+          el.addEventListener("change", e => this._onChange(e));
+        }
       }
     });
+  }
+
+  _onChangeOverride(ev) {
+    if (!this._config) return;
+    const el    = ev.currentTarget;
+    const val   = el.value;
+    const pfx   = el.dataset.pfx;
+    const type  = el.dataset.otype; // 'name' or 'image'
+    const newCfg = _mergeConfig(this._config);
+
+    const targetObj = type === 'name' ? 'name_overrides' : 'image_overrides';
+
+    if (val) newCfg[targetObj][pfx] = val;
+    else     delete newCfg[targetObj][pfx];
+
+    this._config = newCfg;
+    this.dispatchEvent(new CustomEvent("config-changed",
+      { detail: { config: newCfg }, bubbles: true, composed: true }));
   }
 
   static get _MAP() {
@@ -1090,8 +1133,11 @@ code {
 
     const list = this.shadowRoot.getElementById("alias-list");
     if (list) {
-      list.querySelectorAll("[data-alias-pfx]").forEach(el => {
-        el.value = (c.name_overrides || {})[el.dataset.aliasPfx] || "";
+      list.querySelectorAll("[data-otype='name']").forEach(el => {
+        el.value = (c.name_overrides || {})[el.dataset.pfx] || "";
+      });
+      list.querySelectorAll("[data-otype='image']").forEach(el => {
+        el.value = (c.image_overrides || {})[el.dataset.pfx] || "";
       });
     }
   }
@@ -1107,15 +1153,10 @@ code {
     
     const newCfg = _mergeConfig(this._config);
 
-    if (el.dataset.aliasPfx) {
-      if (value) newCfg.name_overrides[el.dataset.aliasPfx] = value;
-      else        delete newCfg.name_overrides[el.dataset.aliasPfx];
-    } else {
-      const path = UnifiMonitorCardEditor._MAP[el.id];
-      if (!path) return;
-      if (path.length === 1)          newCfg[path[0]]       = value;
-      else if (path[0] === "style")   newCfg.style[path[1]] = value;
-    }
+    const path = UnifiMonitorCardEditor._MAP[el.id];
+    if (!path) return;
+    if (path.length === 1)          newCfg[path[0]]       = value;
+    else if (path[0] === "style")   newCfg.style[path[1]] = value;
 
     this._config = newCfg;
     this.dispatchEvent(new CustomEvent("config-changed",
