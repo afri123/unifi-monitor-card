@@ -1,10 +1,9 @@
 // ================================================================
-// UniFi Monitor Card  v0.0.18
+// UniFi Monitor Card  v0.0.19
 // ================================================================
 
-const UMC_VERSION = "0.0.18";
+const UMC_VERSION = "0.0.19";
 
-// Hardcoded list of exact filenames from the repository for the picker
 const UNIFI_IMAGES = [
   "UDM.png", "UDM-Pro.png", "UDM-SE.png", "UDR.png", "UX.png", "UXG-Lite.png", "UXG-Pro.png", "UXG-Max.png",
   "USG.png", "USG-Pro-4.png",
@@ -29,7 +28,7 @@ const UMC_DEFAULTS = {
   show_clients:      true,
   show_ip:           true,
   show_real_images:  true,
-  image_base_url:    "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/",
+  image_base_url:    "/local/unifi/", // Switched to robust local hosting!
   compact_mode:      false,
   sort_online_first: true,
   name_overrides:    {},
@@ -85,9 +84,6 @@ function _sev(val, warn = 70, crit = 90) {
   return "";
 }
 
-// ================================================================
-// MAIN CARD
-// ================================================================
 class UnifiMonitorCard extends HTMLElement {
   constructor() {
     super();
@@ -166,7 +162,6 @@ class UnifiMonitorCard extends HTMLElement {
 
 .devices { display: flex; flex-direction: column; gap: ${c.compact_mode ? "6px" : "8px"}; }
 
-/* DEVICE ROW */
 .row {
   background:    ${s.device_bg};
   border-radius: 10px;
@@ -187,14 +182,10 @@ class UnifiMonitorCard extends HTMLElement {
 .row.is-online::before  { background: ${s.icon_online_color}; }
 .row.is-offline { opacity: .55; }
 
-/* HOVER FLICKER FIX: Disable pointer events on internal structural elements */
 .top, .metrics { pointer-events: none; }
-/* Re-enable interaction ONLY for explicitly clickable elements */
 .name, .badge, .btn { pointer-events: auto; }
-
 .top { display: grid; grid-template-columns: 36px 1fr auto; align-items: start; gap: 11px; }
 
-/* SICON / IMAGES */
 .sicon {
   width: 36px; height: 36px; border-radius: 8px;
   display: flex; align-items: center; justify-content: center;
@@ -221,7 +212,6 @@ class UnifiMonitorCard extends HTMLElement {
 .dot.off { background: ${s.icon_offline_color}; }
 @keyframes umcDot { 0% { box-shadow: 0 0 0 0 rgba(0,200,83,.6); } 60% { box-shadow: 0 0 0 4px rgba(0,200,83,0); } 100% { box-shadow: 0 0 0 0 rgba(0,200,83,0); } }
 
-/* INFO */
 .info { min-width: 0; }
 .info-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
 .name-row { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; flex: 1; }
@@ -232,7 +222,6 @@ class UnifiMonitorCard extends HTMLElement {
 }
 .name:hover { opacity: .65; }
 
-/* TAGS */
 .type-tag, .ip-tag {
   font-size: 9px; padding: 2px 5px; border-radius: 4px;
   background: rgba(128,128,128,.10); color: ${s.meta_color};
@@ -265,7 +254,6 @@ class UnifiMonitorCard extends HTMLElement {
 .chip { display: flex; align-items: center; gap: 3px; font-size: 10px; color: ${s.meta_color}; letter-spacing: .02em; }
 .chip ha-icon { --mdc-icon-size: 11px; opacity: .6; }
 
-/* ACTIONS */
 .actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
 .btn {
   background: transparent; border: 1px solid rgba(128,128,128,.18); color: var(--secondary-text-color);
@@ -275,7 +263,6 @@ class UnifiMonitorCard extends HTMLElement {
 .btn:hover { background: rgba(128,128,128,.12); border-color: rgba(128,128,128,.30); color: var(--primary-text-color); }
 .btn ha-icon { --mdc-icon-size: 15px; }
 
-/* METRICS */
 .metrics {
   margin-top: ${c.compact_mode ? "9px" : "11px"}; padding-top: ${c.compact_mode ? "9px" : "11px"};
   border-top: 1px solid rgba(128,128,128,.08); display: flex; flex-direction: column; gap: ${c.compact_mode ? "5px" : "6px"};
@@ -347,7 +334,6 @@ class UnifiMonitorCard extends HTMLElement {
     if (!this._devEl || !this._hass) return;
     const cfg = this._config;
 
-    // Headings
     if (cfg.title || cfg.title_icon) {
       if (this._ttlEl.textContent !== (cfg.title || "")) this._ttlEl.textContent = cfg.title || "";
       if (this.shadowRoot.getElementById("ttl-icon").icon !== (cfg.title_icon || "mdi:lan")) this.shadowRoot.getElementById("ttl-icon").icon = cfg.title_icon || "mdi:lan";
@@ -372,13 +358,11 @@ class UnifiMonitorCard extends HTMLElement {
 
     if (cfg.sort_online_first) devices.sort((a, b) => (+b.online - +a.online) || a.name.localeCompare(b.name));
 
-    // Summary pills
     const nOn = devices.filter(d => d.online).length;
     const nOff = devices.length - nOn;
     const plsHtml = `<span class="pill pill-on">${nOn} online</span>` + (nOff > 0 ? `<span class="pill pill-off">${nOff} offline</span>` : "");
     if (this._plsEl.innerHTML !== plsHtml) this._plsEl.innerHTML = plsHtml;
 
-    // SMART RENDER LOOP
     const validPrefixes = new Set();
 
     devices.forEach((dev, index) => {
@@ -400,7 +384,6 @@ class UnifiMonitorCard extends HTMLElement {
       const manualImg = cfg.image_overrides[p]; 
       const typeLabel = dev.type_label || "DEVICE";
 
-      // Entites
       const cpuEnt = this._hass.states[`sensor.${p}_cpu_utilization`];
       const ramEnt = this._hass.states[`sensor.${p}_memory_utilization`];
       const tmpEnt = this._hass.states[`sensor.${p}_temperature`] || this._hass.states[`sensor.${p}_cpu_temperature`];
@@ -410,7 +393,6 @@ class UnifiMonitorCard extends HTMLElement {
       const hasUpd = updEnt?.state === "on";
       const version = updEnt?.attributes?.installed_version || updEnt?.attributes?.latest_version || null;
 
-      // Smart IP/Client extraction
       const rawName = cpuEnt?.attributes?.friendly_name || p;
       const ipMatch = rawName.match(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/);
       const ipAddr  = this._hass.states[`sensor.${p}_ip_address`]?.state || (ipMatch ? ipMatch[0] : null);
@@ -442,11 +424,9 @@ class UnifiMonitorCard extends HTMLElement {
       if (ram != null && !isNaN(ram)) bars.push(this._bar("RAM", "ram", ram, ramSev, `${ram.toFixed(0)}%`));
       if (cfg.show_temp && tmp != null && !isNaN(tmp)) bars.push(this._bar("TMP", "temp", Math.min(tmp, 100), tmpSev, `${tmp.toFixed(0)}°`));
 
-      // Image Logic
-      const baseUrl = cfg.image_base_url || "https://raw.githubusercontent.com/cyberconsecurity/Unifi/main/";
+      const baseUrl = cfg.image_base_url || "/local/unifi/";
       const imgUrl = manualImg ? `${baseUrl}${manualImg}` : `${baseUrl}${this._formatImageName(p)}.png`;
 
-      // Flawless Image Fallback structure
       const imageHtml = cfg.show_real_images 
         ? `<ha-icon class="sicon-icon" icon="${dev.icon || "mdi:router-network"}"></ha-icon>
            <img class="real-img" src="${imgUrl}" 
@@ -481,12 +461,10 @@ class UnifiMonitorCard extends HTMLElement {
   ${bars.length ? `<div class="metrics">${bars.join("")}</div>` : ""}
 `;
 
-      // Update HTML ONLY if changed
       if (rowEl._cachedHtml !== innerHtml) {
         rowEl.innerHTML = innerHtml;
         rowEl._cachedHtml = innerHtml;
 
-        // Force check if image is cached to bypass onload bug
         const img = rowEl.querySelector('.real-img');
         if (img && img.complete && img.naturalHeight !== 0) {
             img.style.opacity = '1';
@@ -494,18 +472,15 @@ class UnifiMonitorCard extends HTMLElement {
         }
       }
 
-      // FLICKER FIX: Only append if it's new. Prevent moving nodes unnecessarily!
       if (isNew) {
         this._devEl.appendChild(rowEl);
       } else {
-        // Correct position if DOM order doesn't match Array order
         if (this._devEl.children[index] !== rowEl) {
           this._devEl.insertBefore(rowEl, this._devEl.children[index]);
         }
       }
     });
 
-    // Cleanup removed devices
     Array.from(this._devEl.children).forEach(child => {
       if (child.classList.contains('row') && !validPrefixes.has(child.dataset.pfx)) {
         child.remove();
@@ -532,10 +507,6 @@ class UnifiMonitorCard extends HTMLElement {
   getCardSize() { return (this._devices?.length || 2) + 1; }
 }
 
-
-// ================================================================
-// EDITOR
-// ================================================================
 class UnifiMonitorCardEditor extends HTMLElement {
   constructor() {
     super();
@@ -599,8 +570,8 @@ ha-textfield, ha-icon-picker { width: 100%; }
     <div class="sw-row"><div class="sw-label">Uptime</div><ha-switch id="sw_uptime"></ha-switch></div>
     <div class="sw-row"><div class="sw-label">Connected clients</div><ha-switch id="sw_clients"></ha-switch></div>
     <div class="sw-row"><div class="sw-label">IP Address</div><ha-switch id="sw_ip"></ha-switch></div>
-    <div class="sw-row"><div><div class="sw-label">Real Device Images</div><div class="sw-sub">Load images instead of icons</div></div><ha-switch id="sw_real_images"></ha-switch></div>
-    <ha-textfield id="f_image_base_url" label="Image Base URL"></ha-textfield>
+    <div class="sw-row"><div><div class="sw-label">Real Device Images</div><div class="sw-sub">Load images from local folder</div></div><ha-switch id="sw_real_images"></ha-switch></div>
+    <ha-textfield id="f_image_base_url" label="Image Base URL (Default: /local/unifi/)"></ha-textfield>
   </div>
 </details>
 
@@ -645,7 +616,7 @@ ha-textfield, ha-icon-picker { width: 100%; }
 <details>
   <summary><ha-icon icon="mdi:cellphone-link"></ha-icon>Device Overrides</summary>
   <div class="content" id="alias-list">
-    <p class="hint">Override the display name and select an exact image from the Unifi Repository.</p>
+    <p class="hint">Override the display name and select an exact image from your local folder.</p>
   </div>
 </details>`;
 
