@@ -1,303 +1,962 @@
+// ================================================================
+// UniFi Monitor Card  v3.0
+// ================================================================
+// Design direction: "Precision Instrument"
+// Inspired by high-end network ops dashboards and aerospace HUDs.
+// Monospaced data readouts, sharp geometry, controlled density.
+// Every pixel has a job.
+// ================================================================
+
+const UMC_VERSION = "3.0.0";
+
+const UMC_DEFAULTS = {
+  title:             "Network Infrastructure",
+  auto_discover:     true,
+  show_version:      true,
+  show_temp:         true,
+  show_uptime:       true,
+  show_clients:      true,
+  compact_mode:      false,
+  sort_online_first: true,
+  name_overrides:    {},
+  style: {
+    // Card container
+    card_bg:            "var(--ha-card-background, var(--card-background-color, #fff))",
+    card_padding:       "20px",
+    card_border_radius: "16px",
+    card_shadow:        "var(--ha-card-box-shadow, 0 2px 16px rgba(0,0,0,.07))",
+    // Accent / brand
+    accent_color:       "var(--primary-color, #2196f3)",
+    // Header text
+    title_font_size:    "10px",
+    title_color:        "var(--secondary-text-color)",
+    // Device rows
+    device_bg:          "rgba(128,128,128,.05)",
+    device_bg_hover:    "rgba(128,128,128,.10)",
+    device_name_size:   "14px",
+    device_name_color:  "var(--primary-text-color)",
+    // Meta / secondary text
+    meta_color:         "var(--disabled-text-color, #9e9e9e)",
+    // Status colors
+    icon_online_color:  "#00c853",
+    icon_offline_color: "#ff1744",
+    // Bars
+    bar_height:         "3px",
+    bar_cpu_color:      "#2196f3",
+    bar_ram_color:      "#9c27b0",
+    bar_temp_color:     "#ff6d00",
+  }
+};
+
+function _mergeConfig(config) {
+  const out          = Object.assign({}, UMC_DEFAULTS, config);
+  out.style          = Object.assign({}, UMC_DEFAULTS.style, config.style || {});
+  out.name_overrides = Object.assign({}, config.name_overrides || {});
+  return out;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────
+
+function _uptime(seconds) {
+  if (!seconds || isNaN(+seconds)) return null;
+  const s = Math.floor(+seconds);
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function _sev(val, warn = 70, crit = 90) {
+  if (val >= crit) return "crit";
+  if (val >= warn) return "warn";
+  return "";
+}
+
+// ================================================================
+// MAIN CARD
+// ================================================================
 class UnifiMonitorCard extends HTMLElement {
   constructor() {
     super();
-    this.attachShadow({ mode: 'open' });
-    this._discoveredDevices = null;
+    this.attachShadow({ mode: "open" });
+    this._config   = null;
+    this._hass     = null;
+    this._devices  = null;
+    this._rendered = false;
   }
 
-  static getConfigElement() {
-    return document.createElement("unifi-monitor-card-editor");
-  }
+  static getConfigElement() { return document.createElement("unifi-monitor-card-editor"); }
 
   static getStubConfig() {
-    return { 
-      title: "UniFi Network", 
-      auto_discover: true, 
-      show_version: true,
-      name_overrides: {},
-      style: {
-        card_bg: "var(--ha-card-background, var(--card-background-color, white))",
-        card_padding: "16px",
-        card_border_radius: "12px",
-        card_shadow: "var(--ha-card-box-shadow, none)",
-        title_font_size: "1.2rem",
-        title_color: "var(--primary-text-color)",
-        device_bg: "rgba(150,150,150, 0.05)",
-        device_name_size: "14px",
-        device_name_color: "var(--primary-text-color)",
-        version_color: "var(--secondary-text-color)",
-        bar_height: "4px"
-      }
+    return {
+      title:         "Network Infrastructure",
+      auto_discover: true,
+      show_version:  true,
+      show_temp:     true,
+      show_uptime:   true,
+      show_clients:  true,
     };
   }
 
   setConfig(config) {
-    this.config = JSON.parse(JSON.stringify(config));
-    if (!this.config.style) this.config.style = {};
-    
-    // Fallback für Defaults
-    const defaults = UnifiMonitorCard.getStubConfig().style;
-    for (const key in defaults) {
-      if (this.config.style[key] === undefined) this.config.style[key] = defaults[key];
-    }
-    
-    // Sofortiges Re-Rendering bei Config-Änderung
-    this.render();
+    this._config   = _mergeConfig(config);
+    this._rendered = false;
+    this._devices  = null;
+    if (this._hass) this._paint();
   }
 
   set hass(hass) {
     this._hass = hass;
-    this._discoveredDevices = this.discoverDevices();
-    this.updateData();
+    this._paint();
   }
 
-  discoverDevices() {
-    const devices = [];
-    if (!this._hass) return devices;
-    const prefixes = new Set();
-    for (const entityId in this._hass.states) {
-      if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
-        const prefix = entityId.substring(7, entityId.length - 16);
-        prefixes.add(prefix);
-      }
-    }
-    prefixes.forEach(prefix => {
-      const cpuEntity = this._hass.states[`sensor.${prefix}_cpu_utilization`];
-      let rawName = cpuEntity?.attributes?.friendly_name || prefix;
-      let cleanName = rawName.split(' (')[0].replace(/ CPU utilization/i, '');
-      let icon = 'mdi:router-network';
-      if (prefix.includes('usw') || prefix.includes('switch')) icon = 'mdi:switch';
-      if (prefix.includes('u6') || prefix.includes('ap') || prefix.includes('wifi') || prefix.includes('iw')) icon = 'mdi:access-point';
-      devices.push({ prefix: prefix, default_name: cleanName, icon: icon });
-    });
-    return devices.sort((a, b) => a.default_name.localeCompare(b.default_name));
+  _paint() {
+    if (!this._config || !this._hass) return;
+    if (!this._devices)  this._devices  = this._discover();
+    if (!this._rendered) { this._buildShell(); this._rendered = true; }
+    this._update();
   }
 
-  render() {
-    if (!this.config) return;
-    const s = this.config.style || {};
-    
+  // ── Build shadow DOM (CSS + static skeleton) ─────────────────────
+  _buildShell() {
+    const s = this._config.style;
+    const c = this._config;
+
     this.shadowRoot.innerHTML = `
-      <style>
-        :host {
-          --umc-update-blue: #03a9f4;
-          --umc-online: ${this.config.color_online || '#4caf50'};
-          --umc-offline: ${this.config.color_offline || '#f44336'};
-        }
-        .card-container { 
-          background: ${s.card_bg}; 
-          border-radius: ${s.card_border_radius}; 
-          padding: ${s.card_padding}; 
-          box-shadow: ${s.card_shadow};
-          font-family: var(--primary-font-family, inherit); 
-          color: var(--primary-text-color); 
-        }
-        .header { 
-          font-size: ${s.title_font_size}; 
-          color: ${s.title_color}; 
-          font-weight: bold; 
-          margin-bottom: 12px; 
-          display: ${this.config.title ? 'block' : 'none'};
-        }
-        .device-row { 
-          display: grid; 
-          grid-template-columns: 40px 1fr auto; 
-          align-items: center; 
-          gap: 12px; 
-          padding: 12px; 
-          border-radius: 8px; 
-          background: ${s.device_bg}; 
-          margin-bottom: 8px; 
-        }
-        .online { color: var(--umc-online); }
-        .offline { color: var(--umc-offline); }
-        .device-name { 
-          font-weight: 600; 
-          font-size: ${s.device_name_size}; 
-          color: ${s.device_name_color}; 
-          cursor: pointer; 
-        }
-        .version-text { 
-          font-size: 10px; 
-          color: ${s.version_color}; 
-          margin-top: -2px; 
-          display: ${this.config.show_version !== false ? 'block' : 'none'};
-        }
-        .update-badge { background: var(--umc-update-blue); color: white; font-size: 9px; padding: 2px 6px; border-radius: 10px; cursor: pointer; animation: pulse 2s infinite; }
-        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0.7); } 70% { box-shadow: 0 0 0 6px rgba(3, 169, 244, 0); } 100% { box-shadow: 0 0 0 0 rgba(3, 169, 244, 0); } }
-        .stat-row { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--secondary-text-color); margin-top: 4px; }
-        .bar-bg { flex-grow: 1; height: ${s.bar_height}; background: rgba(150,150,150, 0.2); border-radius: 2px; overflow: hidden; }
-        .bar-fill { height: 100%; transition: width 0.5s; background: var(--primary-color); }
-        .btn-restart { background: transparent; border: none; color: var(--primary-text-color); cursor: pointer; opacity: 0.6; }
-      </style>
-      <div class="card-container">
-        <div class="header">${this.config.title || ''}</div>
-        <div id="devices"></div>
-      </div>
-    `;
-    this.content = this.shadowRoot.getElementById('devices');
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:host { display: block; }
+
+/* ── Card ───────────────────────────────────────────────── */
+.card {
+  background:    ${s.card_bg};
+  border-radius: ${s.card_border_radius};
+  padding:       ${s.card_padding};
+  box-shadow:    ${s.card_shadow};
+  font-family:   'DM Mono', 'Roboto Mono', 'Courier New', monospace;
+  color:         var(--primary-text-color);
+  overflow:      hidden;
+  position:      relative;
+}
+/* Subtle geometric accent corner */
+.card::before {
+  content:       '';
+  position:      absolute;
+  top: 0; right: 0;
+  width: 56px; height: 56px;
+  background:    ${s.accent_color};
+  opacity:       .06;
+  border-radius: 0 ${s.card_border_radius} 0 56px;
+  pointer-events: none;
+}
+
+/* ── Header ─────────────────────────────────────────────── */
+.header {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  margin-bottom:   16px;
+  padding-bottom:  12px;
+  border-bottom:   1px solid rgba(128,128,128,.10);
+}
+.header-left { display: flex; align-items: center; gap: 7px; }
+.header-icon { --mdc-icon-size: 13px; color: ${s.accent_color}; opacity: .85; }
+.card-title {
+  font-size:      ${s.title_font_size};
+  font-weight:    800;
+  color:          ${s.title_color};
+  letter-spacing: .16em;
+  text-transform: uppercase;
+}
+.pills { display: flex; gap: 5px; }
+.pill {
+  font-size:      9px;
+  font-weight:    700;
+  padding:        2px 8px;
+  border-radius:  20px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+.pill-on  { background: rgba(0,200,83,.12);  color: ${s.icon_online_color};  }
+.pill-off { background: rgba(255,23,68,.12); color: ${s.icon_offline_color}; }
+
+/* ── Device list ─────────────────────────────────────────── */
+.devices { display: flex; flex-direction: column; gap: ${c.compact_mode ? "6px" : "8px"}; }
+
+/* ── Device row ─────────────────────────────────────────── */
+.row {
+  background:    ${s.device_bg};
+  border-radius: 10px;
+  border:        1px solid transparent;
+  padding:       ${c.compact_mode ? "10px 13px" : "13px 15px"};
+  transition:    background .15s, border-color .15s;
+  position:      relative;
+  overflow:      hidden;
+}
+.row:hover { background: ${s.device_bg_hover}; border-color: rgba(128,128,128,.13); }
+/* Online accent stripe */
+.row::before {
+  content:       '';
+  position:      absolute;
+  left: 0; top: 18%; bottom: 18%;
+  width:         2px;
+  border-radius: 2px;
+  background:    transparent;
+  transition:    background .3s;
+}
+.row.is-online::before  { background: ${s.icon_online_color}; }
+.row.is-offline { opacity: .55; }
+
+/* ── Top grid: icon · info · actions ────────────────────── */
+.top {
+  display:               grid;
+  grid-template-columns: 34px 1fr auto;
+  align-items:           start;
+  gap:                   11px;
+}
+
+/* ── Status icon ─────────────────────────────────────────── */
+.sicon {
+  width: 34px; height: 34px;
+  border-radius: 8px;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  flex-shrink:   0;
+  position:      relative;
+  margin-top:    1px;
+}
+.sicon ha-icon { --mdc-icon-size: 18px; }
+.sicon.is-online  { background: rgba(0,200,83,.09);  color: ${s.icon_online_color}; }
+.sicon.is-offline { background: rgba(255,23,68,.08); color: ${s.icon_offline_color}; }
+.dot {
+  position:      absolute;
+  bottom: 3px; right: 3px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background:    ${s.icon_online_color};
+  animation:     umcDot 2.8s infinite ease-in-out;
+}
+@keyframes umcDot {
+  0%   { box-shadow: 0 0 0 0   rgba(0,200,83,.6); }
+  60%  { box-shadow: 0 0 0 5px rgba(0,200,83,0);  }
+  100% { box-shadow: 0 0 0 0   rgba(0,200,83,0);  }
+}
+
+/* ── Info col ───────────────────────────────────────────── */
+.info { min-width: 0; }
+.name-row {
+  display:     flex;
+  align-items: center;
+  gap:         7px;
+  flex-wrap:   wrap;
+}
+.name {
+  font-size:      ${s.device_name_size};
+  font-weight:    600;
+  color:          ${s.device_name_color};
+  cursor:         pointer;
+  white-space:    nowrap;
+  overflow:       hidden;
+  text-overflow:  ellipsis;
+  font-family:    var(--primary-font-family, 'Roboto', sans-serif);
+  letter-spacing: -.01em;
+  transition:     opacity .13s;
+}
+.name:hover { opacity: .65; }
+
+.badge {
+  display:        inline-flex;
+  align-items:    center;
+  gap:            3px;
+  background:     ${s.accent_color};
+  color:          #fff;
+  font-size:      8px;
+  font-weight:    800;
+  padding:        2px 6px 2px 5px;
+  border-radius:  20px;
+  cursor:         pointer;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space:    nowrap;
+  animation:      umcBadge 2.2s infinite;
+}
+@keyframes umcBadge {
+  0%,100% { box-shadow: 0 0 0 0   color-mix(in srgb, ${s.accent_color} 60%, transparent); }
+  50%     { box-shadow: 0 0 0 5px color-mix(in srgb, ${s.accent_color} 0%,  transparent); }
+}
+.badge ha-icon { --mdc-icon-size: 9px; }
+
+.offline-tag {
+  font-size:      8px;
+  font-weight:    700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding:        2px 6px;
+  border-radius:  4px;
+  background:     rgba(255,23,68,.10);
+  color:          ${s.icon_offline_color};
+}
+
+/* Meta chips */
+.meta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
+.chip {
+  display:     flex;
+  align-items: center;
+  gap:         3px;
+  font-size:   9.5px;
+  color:       ${s.meta_color};
+  letter-spacing: .02em;
+}
+.chip ha-icon { --mdc-icon-size: 10px; opacity: .6; }
+
+/* ── Action buttons ─────────────────────────────────────── */
+.actions { display: flex; flex-direction: column; gap: 5px; flex-shrink: 0; }
+.btn {
+  background:    transparent;
+  border:        1px solid rgba(128,128,128,.18);
+  color:         var(--secondary-text-color);
+  width: 28px; height: 28px;
+  border-radius: 7px;
+  cursor:        pointer;
+  display:       flex;
+  align-items:   center;
+  justify-content: center;
+  transition:    all .14s;
+}
+.btn:hover {
+  background:   rgba(128,128,128,.12);
+  border-color: rgba(128,128,128,.30);
+  color:        var(--primary-text-color);
+}
+.btn ha-icon { --mdc-icon-size: 15px; }
+
+/* ── Metrics ─────────────────────────────────────────────── */
+.metrics {
+  margin-top:  ${c.compact_mode ? "9px" : "11px"};
+  padding-top: ${c.compact_mode ? "9px" : "11px"};
+  border-top:  1px solid rgba(128,128,128,.08);
+  display:     flex;
+  flex-direction: column;
+  gap:         ${c.compact_mode ? "5px" : "6px"};
+}
+.mrow {
+  display:               grid;
+  grid-template-columns: 30px 1fr 32px;
+  align-items:           center;
+  gap:                   8px;
+}
+.mlabel {
+  font-size:      8px;
+  font-weight:    700;
+  letter-spacing: .10em;
+  text-transform: uppercase;
+  color:          ${s.meta_color};
+}
+.track {
+  height:        ${s.bar_height};
+  background:    rgba(128,128,128,.13);
+  border-radius: 99px;
+  overflow:      hidden;
+}
+.fill {
+  height:     100%;
+  border-radius: 99px;
+  transition: width .65s cubic-bezier(.4,0,.2,1);
+}
+.fill-cpu  { background: ${s.bar_cpu_color};  }
+.fill-ram  { background: ${s.bar_ram_color};  }
+.fill-temp { background: ${s.bar_temp_color}; }
+.fill.warn { filter: brightness(1.25); }
+.fill.crit { filter: brightness(1.5) saturate(1.3); }
+
+.mval {
+  font-size:   9.5px;
+  font-weight: 700;
+  text-align:  right;
+  letter-spacing: .02em;
+  font-variant-numeric: tabular-nums;
+  color:       var(--primary-text-color);
+}
+.mval.warn { color: #ffab00; }
+.mval.crit { color: ${s.icon_offline_color}; }
+
+/* ── Empty state ─────────────────────────────────────────── */
+.empty {
+  padding:    36px 20px;
+  text-align: center;
+  color:      ${s.meta_color};
+  font-size:  12px;
+  line-height: 1.6;
+}
+.empty ha-icon { --mdc-icon-size: 36px; display: block; margin: 0 auto 10px; opacity: .22; }
+</style>
+
+<div class="card">
+  <div class="header" id="hdr" style="display:none">
+    <div class="header-left">
+      <ha-icon class="header-icon" icon="mdi:lan"></ha-icon>
+      <span class="card-title" id="ttl"></span>
+    </div>
+    <div class="pills" id="pls"></div>
+  </div>
+  <div class="devices" id="dev"></div>
+</div>`;
+
+    this._hdrEl = this.shadowRoot.getElementById("hdr");
+    this._ttlEl = this.shadowRoot.getElementById("ttl");
+    this._plsEl = this.shadowRoot.getElementById("pls");
+    this._devEl = this.shadowRoot.getElementById("dev");
   }
 
-  updateData() {
-    if (!this.content || !this._discoveredDevices || !this._hass) return;
-    let html = '';
-    this._discoveredDevices.forEach(device => {
-      const prefix = device.prefix;
-      const displayName = this.config.name_overrides?.[prefix] || device.default_name;
-      const cpuObj = this._hass.states[`sensor.${prefix}_cpu_utilization`];
-      const ramObj = this._hass.states[`sensor.${prefix}_memory_utilization`];
-      const stateObj = this._hass.states[`sensor.${prefix}_state`];
-      const updateObj = this._hass.states[`update.${prefix}`];
-      const isOnline = stateObj && (stateObj.state === 'connected' || stateObj.state === 'online' || stateObj.state === 'home');
-      const hasUpdate = updateObj && updateObj.state === 'on';
-      const version = updateObj?.attributes?.installed_version || 'N/A';
+  // ── Discover UniFi devices via entity pattern matching ───────────
+  _discover() {
+    if (!this._hass) return [];
+    const prefixes = new Set();
+    for (const id in this._hass.states)
+      if (id.startsWith("sensor.") && id.endsWith("_cpu_utilization"))
+        prefixes.add(id.slice(7, -16));
+
+    const out = [];
+    prefixes.forEach(pfx => {
+      const ent  = this._hass.states[`sensor.${pfx}_cpu_utilization`];
+      const name = (ent?.attributes?.friendly_name || pfx)
+                     .split(" (")[0]
+                     .replace(/ cpu utilization/i, "")
+                     .trim();
+      let icon = "mdi:router-network";
+      if (/usw|switch/.test(pfx))                icon = "mdi:switch";
+      if (/u6|uap|^ap_|wifi|iw|flex/.test(pfx))  icon = "mdi:access-point";
+      if (/udm|dream|usg/.test(pfx))             icon = "mdi:shield-home";
+      out.push({ prefix: pfx, name, icon });
+    });
+    return out.sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // ── Re-render live data ───────────────────────────────────────────
+  _update() {
+    if (!this._devEl || !this._hass) return;
+    const cfg = this._config;
+
+    // Header
+    if (cfg.title) {
+      this._ttlEl.textContent   = cfg.title;
+      this._hdrEl.style.display = "flex";
+    } else {
+      this._hdrEl.style.display = "none";
+    }
+
+    // Active device list
+    const raw = (cfg.devices?.length > 0) ? cfg.devices : this._devices;
+    if (!raw || raw.length === 0) {
+      this._devEl.innerHTML = `
+        <div class="empty">
+          <ha-icon icon="mdi:lan-disconnect"></ha-icon>
+          No UniFi devices found.<br>
+          Make sure the UniFi Network integration is configured.
+        </div>`;
+      this._plsEl.innerHTML = "";
+      return;
+    }
+
+    const ONLINE_STATES = ["connected", "online", "home"];
+    const devices = raw.map(dev => {
+      const so = this._hass.states[`sensor.${dev.prefix}_state`];
+      return { ...dev, online: so ? ONLINE_STATES.includes(so.state?.toLowerCase()) : false };
+    });
+
+    if (cfg.sort_online_first)
+      devices.sort((a, b) => (+b.online - +a.online) || a.name.localeCompare(b.name));
+
+    // Summary pills
+    const nOn  = devices.filter(d => d.online).length;
+    const nOff = devices.length - nOn;
+    this._plsEl.innerHTML =
+      `<span class="pill pill-on">${nOn} online</span>` +
+      (nOff > 0 ? `<span class="pill pill-off">${nOff} offline</span>` : "");
+
+    // Build HTML
+    let html = "";
+    for (const dev of devices) {
+      const p   = dev.prefix;
+      const nom = cfg.name_overrides[p] || dev.name || p;
+
+      const cpuEnt = this._hass.states[`sensor.${p}_cpu_utilization`];
+      const ramEnt = this._hass.states[`sensor.${p}_memory_utilization`];
+      const tmpEnt = this._hass.states[`sensor.${p}_temperature`]
+                  || this._hass.states[`sensor.${p}_cpu_temperature`];
+      const uptEnt = this._hass.states[`sensor.${p}_uptime`];
+      const cliEnt = this._hass.states[`sensor.${p}_clients`]
+                  || this._hass.states[`sensor.${p}_num_sta`]
+                  || this._hass.states[`sensor.${p}_wlan_num_sta`];
+      const updEnt = this._hass.states[`update.${p}`];
+      const hasRst = !!this._hass.states[`button.${p}_restart`];
+
+      const hasUpd  = updEnt?.state === "on";
+      const version = updEnt?.attributes?.installed_version
+                   || updEnt?.attributes?.latest_version
+                   || null;
+
+      const cpu = cpuEnt ? parseFloat(cpuEnt.state) : null;
+      const ram = ramEnt ? parseFloat(ramEnt.state) : null;
+      const tmp = tmpEnt ? parseFloat(tmpEnt.state) : null;
+      const upt = uptEnt ? _uptime(uptEnt.state)    : null;
+      const cli = cliEnt ? parseInt(cliEnt.state, 10) : null;
+
+      const cpuSev = cpu != null ? _sev(cpu)           : "";
+      const ramSev = ram != null ? _sev(ram)           : "";
+      const tmpSev = tmp != null ? _sev(tmp, 65, 80)   : "";
+
+      // Meta chips
+      const chips = [];
+      if (cfg.show_version && version)
+        chips.push(`<span class="chip"><ha-icon icon="mdi:tag-outline"></ha-icon>${version}</span>`);
+      if (cfg.show_uptime && upt)
+        chips.push(`<span class="chip"><ha-icon icon="mdi:clock-outline"></ha-icon>${upt}</span>`);
+      if (cfg.show_clients && cli != null && !isNaN(cli))
+        chips.push(`<span class="chip"><ha-icon icon="mdi:laptop"></ha-icon>${cli}</span>`);
+
+      // Bars
+      const bars = [];
+      if (cpu != null && !isNaN(cpu))
+        bars.push(this._bar("CPU", "cpu", cpu, cpuSev, `${cpu.toFixed(0)}%`));
+      if (ram != null && !isNaN(ram))
+        bars.push(this._bar("RAM", "ram", ram, ramSev, `${ram.toFixed(0)}%`));
+      if (cfg.show_temp && tmp != null && !isNaN(tmp))
+        bars.push(this._bar("TMP", "temp", Math.min(tmp, 100), tmpSev, `${tmp.toFixed(0)}°`));
 
       html += `
-        <div class="device-row">
-          <div class="icon-wrapper ${isOnline ? 'online' : 'offline'}">
-            <ha-icon icon="${device.icon}"></ha-icon>
-          </div>
-          <div class="info-col">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span class="device-name" onclick="this.getRootNode().host.openDetails('${prefix}')">${displayName}</span>
-              ${hasUpdate ? `<span class="update-badge" onclick="this.getRootNode().host.triggerUpdate('${prefix}')">Update</span>` : ''}
-            </div>
-            <span class="version-text">FW: ${version}</span>
-            <div class="stat-row">
-              <div class="bar-bg"><div class="bar-fill" style="width: ${cpuObj?.state || 0}%"></div></div>
-              <span>CPU: ${cpuObj?.state || 0}%</span>
-            </div>
-          </div>
-          <button class="btn-restart" onclick="this.getRootNode().host.triggerRestart('${prefix}')">
-            <ha-icon icon="mdi:restart"></ha-icon>
-          </button>
-        </div>
-      `;
-    });
-    this.content.innerHTML = html;
+<div class="row${dev.online ? " is-online" : " is-offline"}">
+  <div class="top">
+    <div class="sicon ${dev.online ? "is-online" : "is-offline"}">
+      <ha-icon icon="${dev.icon || "mdi:router-network"}"></ha-icon>
+      ${dev.online ? '<span class="dot"></span>' : ""}
+    </div>
+    <div class="info">
+      <div class="name-row">
+        <span class="name" onclick="this.getRootNode().host._openDetails('${p}')">${nom}</span>
+        ${!dev.online ? `<span class="offline-tag">offline</span>` : ""}
+        ${hasUpd
+          ? `<span class="badge" onclick="this.getRootNode().host._triggerUpdate('${p}')">
+               <ha-icon icon="mdi:arrow-up-circle"></ha-icon>Update
+             </span>`
+          : ""}
+      </div>
+      ${chips.length ? `<div class="meta">${chips.join("")}</div>` : ""}
+    </div>
+    <div class="actions">
+      ${hasRst
+        ? `<button class="btn" title="Restart" onclick="this.getRootNode().host._triggerRestart('${p}')">
+             <ha-icon icon="mdi:restart"></ha-icon>
+           </button>`
+        : ""}
+      <button class="btn" title="Details" onclick="this.getRootNode().host._openDetails('${p}')">
+        <ha-icon icon="mdi:information-outline"></ha-icon>
+      </button>
+    </div>
+  </div>
+  ${bars.length ? `<div class="metrics">${bars.join("")}</div>` : ""}
+</div>`;
+    }
+
+    this._devEl.innerHTML = html;
   }
 
-  openDetails(prefix) {
-    this.dispatchEvent(new CustomEvent("hass-more-info", { detail: { entityId: `sensor.${prefix}_cpu_utilization` }, bubbles: true, composed: true }));
+  _bar(label, type, pct, sev, valStr) {
+    return `
+<div class="mrow">
+  <span class="mlabel">${label}</span>
+  <div class="track">
+    <div class="fill fill-${type}${sev ? " " + sev : ""}" style="width:${Math.min(Math.max(pct, 0), 100).toFixed(1)}%"></div>
+  </div>
+  <span class="mval${sev ? " " + sev : ""}">${valStr}</span>
+</div>`;
   }
 
-  triggerRestart(prefix) {
-    if(confirm(`Gerät ${prefix} neu starten?`)) this._hass.callService('button', 'press', { entity_id: `button.${prefix}_restart` });
+  // ── Actions ───────────────────────────────────────────────────────
+  _openDetails(pfx) {
+    this.dispatchEvent(new CustomEvent("hass-more-info", {
+      detail: { entityId: `sensor.${pfx}_cpu_utilization` },
+      bubbles: true, composed: true,
+    }));
+  }
+  _triggerRestart(pfx) {
+    const nom = this._config.name_overrides[pfx]
+             || this._devices?.find(d => d.prefix === pfx)?.name
+             || pfx;
+    if (confirm(`Restart "${nom}"?`))
+      this._hass.callService("button", "press", { entity_id: `button.${pfx}_restart` });
+  }
+  _triggerUpdate(pfx) {
+    const nom = this._config.name_overrides[pfx]
+             || this._devices?.find(d => d.prefix === pfx)?.name
+             || pfx;
+    if (confirm(`Install firmware update for "${nom}"?`))
+      this._hass.callService("update", "install", { entity_id: `update.${pfx}` });
   }
 
-  triggerUpdate(prefix) {
-    if(confirm(`Update für ${prefix} installieren?`)) this._hass.callService('update', 'install', { entity_id: `update.${prefix}` });
-  }
+  getCardSize() { return (this._devices?.length || 2) + 1; }
 }
 
-// --- EDITOR ---
+
+// ================================================================
+// EDITOR
+// Renders the DOM exactly once (_build).
+// Every subsequent setConfig() call only pushes new values into
+// the existing elements (_sync) — so accordions stay open and
+// switches do not snap back.
+// ================================================================
 class UnifiMonitorCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = null;
+    this._hass   = null;
+    this._built  = false;
+  }
+
   setConfig(config) {
-    this._config = config;
-    if (!this._config.style) this._config.style = {};
-    this.render();
+    this._config = _mergeConfig(config);
+    if   (this._built)   this._sync();
+    else if (this._hass) this._build();
   }
 
   set hass(hass) {
     this._hass = hass;
+    if (this._config && !this._built) this._build();
   }
 
-  render() {
-    if (!this._config || !this._hass) return;
-    
-    // Wichtig: Wir bauen das HTML nur einmal, um Focus-Verlust zu vermeiden
-    if (!this.shadowRoot) {
-      this.attachShadow({ mode: 'open' });
-    }
+  // ── Build editor DOM once ─────────────────────────────────────────
+  _build() {
+    if (this._built) return;
+    this._built = true;
 
     this.shadowRoot.innerHTML = `
-      <style>
-        .container { display: flex; flex-direction: column; gap: 12px; font-family: sans-serif; }
-        details { border: 1px solid var(--divider-color); border-radius: 8px; background: var(--card-background-color); }
-        summary { cursor: pointer; padding: 12px; font-weight: bold; outline: none; }
-        .content { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-        ha-textfield { width: 100%; }
-        .flex { display: flex; justify-content: space-between; align-items: center; }
-      </style>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:host { display: block; font-family: var(--primary-font-family, 'Roboto', sans-serif); }
 
-      <div class="container">
-        <details open>
-          <summary>General</summary>
-          <div class="content">
-            <ha-textfield label="Title" .value="${this._config.title || ''}" .configValue="title"></ha-textfield>
-            <div class="flex">
-              <span>Show Firmware</span>
-              <ha-switch .checked="${this._config.show_version !== false}" .configValue="show_version"></ha-switch>
-            </div>
-          </div>
-        </details>
+details {
+  border:        1px solid var(--divider-color, rgba(0,0,0,.10));
+  border-radius: 10px;
+  margin-bottom: 8px;
+  background:    var(--card-background-color, #fff);
+  overflow:      hidden;
+}
+summary {
+  display:       flex;
+  align-items:   center;
+  gap:           8px;
+  cursor:        pointer;
+  padding:       11px 14px;
+  font-size:     11px;
+  font-weight:   700;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color:         var(--secondary-text-color);
+  user-select:   none;
+  list-style:    none;
+  outline:       none;
+  background:    rgba(0,0,0,.02);
+}
+summary::after {
+  content: '›'; margin-left: auto;
+  font-size: 15px; line-height: 1;
+  transition: transform .18s;
+}
+details[open] summary::after { transform: rotate(90deg); }
+summary ha-icon { --mdc-icon-size: 14px; }
 
-        <details>
-          <summary>Styling</summary>
-          <div class="content">
-            <ha-textfield label="Background" .value="${this._config.style.card_bg || ''}" .configValue="style.card_bg"></ha-textfield>
-            <ha-textfield label="Border Radius" .value="${this._config.style.card_border_radius || ''}" .configValue="style.card_border_radius"></ha-textfield>
-            <ha-textfield label="Padding" .value="${this._config.style.card_padding || ''}" .configValue="style.card_padding"></ha-textfield>
-          </div>
-        </details>
+.content { padding: 14px 14px 16px; display: flex; flex-direction: column; gap: 12px; }
+.row2    { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sw-row  {
+  display:         flex;
+  align-items:     center;
+  justify-content: space-between;
+  min-height:      38px; gap: 12px;
+}
+.sw-label { font-size: 13px; color: var(--primary-text-color); }
+.sw-sub   { font-size: 11px; color: var(--secondary-text-color); margin-top: 1px; }
+ha-textfield { width: 100%; }
+.hint {
+  font-size:   11px;
+  color:       var(--secondary-text-color);
+  line-height: 1.55;
+  margin-top: -4px;
+}
+code {
+  font-family:   'DM Mono','Roboto Mono',monospace;
+  font-size:     10px;
+  background:    rgba(128,128,128,.1);
+  padding:       1px 4px;
+  border-radius: 3px;
+}
+</style>
 
-        <details>
-          <summary>Aliases</summary>
-          <div class="content">
-            ${this.getDeviceListHTML()}
-          </div>
-        </details>
-      </div>
-    `;
+<!-- General -->
+<details open>
+  <summary><ha-icon icon="mdi:cog-outline"></ha-icon>General</summary>
+  <div class="content">
+    <ha-textfield id="f_title" label="Card title"></ha-textfield>
+    <div class="sw-row">
+      <div><div class="sw-label">Auto-discover devices</div><div class="sw-sub">Scan HA for UniFi entities</div></div>
+      <ha-switch id="sw_auto"></ha-switch>
+    </div>
+    <div class="sw-row">
+      <div class="sw-label">Sort online devices first</div>
+      <ha-switch id="sw_sort"></ha-switch>
+    </div>
+    <div class="sw-row">
+      <div><div class="sw-label">Compact mode</div><div class="sw-sub">Reduced spacing</div></div>
+      <ha-switch id="sw_compact"></ha-switch>
+    </div>
+  </div>
+</details>
 
-    this.shadowRoot.querySelectorAll('ha-textfield, ha-switch').forEach(el => {
-      el.addEventListener('change', (ev) => this._valueChanged(ev));
-    });
+<!-- Display Options -->
+<details>
+  <summary><ha-icon icon="mdi:eye-outline"></ha-icon>Display Options</summary>
+  <div class="content">
+    <div class="sw-row">
+      <div class="sw-label">Firmware version</div>
+      <ha-switch id="sw_version"></ha-switch>
+    </div>
+    <div class="sw-row">
+      <div class="sw-label">Temperature bar</div>
+      <ha-switch id="sw_temp"></ha-switch>
+    </div>
+    <div class="sw-row">
+      <div class="sw-label">Uptime</div>
+      <ha-switch id="sw_uptime"></ha-switch>
+    </div>
+    <div class="sw-row">
+      <div class="sw-label">Connected clients</div>
+      <ha-switch id="sw_clients"></ha-switch>
+    </div>
+  </div>
+</details>
+
+<!-- Card Styling -->
+<details>
+  <summary><ha-icon icon="mdi:palette-outline"></ha-icon>Card Styling</summary>
+  <div class="content">
+    <ha-textfield id="f_card_bg" label="Background"></ha-textfield>
+    <p class="hint">Any CSS value: <code>#1c1c1e</code> · <code>rgba(255,255,255,.9)</code> · <code>linear-gradient(135deg,#0f0c29,#302b63)</code> · <code>var(--ha-card-background)</code></p>
+    <div class="row2">
+      <ha-textfield id="f_card_border_radius" label="Border radius"></ha-textfield>
+      <ha-textfield id="f_card_padding"       label="Padding"></ha-textfield>
+    </div>
+    <ha-textfield id="f_card_shadow"  label="Box shadow"></ha-textfield>
+    <ha-textfield id="f_accent_color" label="Accent color"></ha-textfield>
+  </div>
+</details>
+
+<!-- Typography -->
+<details>
+  <summary><ha-icon icon="mdi:format-text"></ha-icon>Typography</summary>
+  <div class="content">
+    <div class="row2">
+      <ha-textfield id="f_title_font_size"   label="Title size"></ha-textfield>
+      <ha-textfield id="f_title_color"       label="Title color"></ha-textfield>
+    </div>
+    <div class="row2">
+      <ha-textfield id="f_device_name_size"  label="Name size"></ha-textfield>
+      <ha-textfield id="f_device_name_color" label="Name color"></ha-textfield>
+    </div>
+    <ha-textfield id="f_meta_color" label="Meta / secondary text color"></ha-textfield>
+  </div>
+</details>
+
+<!-- Device Rows -->
+<details>
+  <summary><ha-icon icon="mdi:server-outline"></ha-icon>Device Rows</summary>
+  <div class="content">
+    <ha-textfield id="f_device_bg"       label="Row background"></ha-textfield>
+    <ha-textfield id="f_device_bg_hover" label="Row background (hover)"></ha-textfield>
+    <div class="row2">
+      <ha-textfield id="f_icon_online_color"  label="Online color"></ha-textfield>
+      <ha-textfield id="f_icon_offline_color" label="Offline color"></ha-textfield>
+    </div>
+  </div>
+</details>
+
+<!-- Metric Bars -->
+<details>
+  <summary><ha-icon icon="mdi:chart-bar"></ha-icon>Metric Bars</summary>
+  <div class="content">
+    <ha-textfield id="f_bar_height" label="Bar height (e.g. 3px)"></ha-textfield>
+    <div class="row2">
+      <ha-textfield id="f_bar_cpu_color"  label="CPU color"></ha-textfield>
+      <ha-textfield id="f_bar_ram_color"  label="RAM color"></ha-textfield>
+    </div>
+    <ha-textfield id="f_bar_temp_color" label="Temperature color"></ha-textfield>
+  </div>
+</details>
+
+<!-- Name Aliases -->
+<details>
+  <summary><ha-icon icon="mdi:rename-outline"></ha-icon>Device Name Aliases</summary>
+  <div class="content" id="alias-list">
+    <p class="hint">Override the auto-discovered display name for each device.</p>
+  </div>
+</details>`;
+
+    this._buildAliases();
+    this._sync();
+    this._bind();
   }
 
-  getDeviceListHTML() {
-    const prefixes = new Set();
-    for (const entityId in this._hass.states) {
-      if (entityId.startsWith('sensor.') && entityId.endsWith('_cpu_utilization')) {
-        prefixes.add(entityId.substring(7, entityId.length - 16));
-      }
+  _buildAliases() {
+    const list = this.shadowRoot.getElementById("alias-list");
+    if (!list || !this._hass) return;
+    const hint = list.querySelector("p");
+    list.innerHTML = "";
+    if (hint) list.appendChild(hint);
+
+    const prefixes = [];
+    for (const id in this._hass.states)
+      if (id.startsWith("sensor.") && id.endsWith("_cpu_utilization"))
+        prefixes.push(id.slice(7, -16));
+    prefixes.sort();
+
+    if (prefixes.length === 0) {
+      const p = document.createElement("p");
+      p.className = "hint";
+      p.textContent = "No UniFi devices discovered yet.";
+      list.appendChild(p);
+      return;
     }
-    return Array.from(prefixes).map(prefix => {
-      const currentAlias = (this._config.name_overrides || {})[prefix] || '';
-      return `<ha-textfield label="Alias for ${prefix}" .value="${currentAlias}" .prefix="${prefix}" class="alias-input"></ha-textfield>`;
-    }).join('');
+
+    for (const pfx of prefixes) {
+      const tf = document.createElement("ha-textfield");
+      tf.style.width        = "100%";
+      tf.style.marginBottom = "6px";
+      tf.label              = `Alias for: ${pfx}`;
+      tf.value              = (this._config.name_overrides || {})[pfx] || "";
+      tf.dataset.aliasPfx   = pfx;
+      tf.addEventListener("change", e => this._onChange(e));
+      list.appendChild(tf);
+    }
   }
 
-  _valueChanged(ev) {
+  _bind() {
+    this.shadowRoot.querySelectorAll("ha-textfield").forEach(el =>
+      el.addEventListener("change", e => this._onChange(e)));
+    this.shadowRoot.querySelectorAll("ha-switch").forEach(el =>
+      el.addEventListener("change", e => this._onChange(e)));
+  }
+
+  static get _MAP() {
+    return {
+      f_title:               ["title"],
+      sw_auto:               ["auto_discover"],
+      sw_sort:               ["sort_online_first"],
+      sw_compact:            ["compact_mode"],
+      sw_version:            ["show_version"],
+      sw_temp:               ["show_temp"],
+      sw_uptime:             ["show_uptime"],
+      sw_clients:            ["show_clients"],
+      f_card_bg:             ["style", "card_bg"],
+      f_card_border_radius:  ["style", "card_border_radius"],
+      f_card_padding:        ["style", "card_padding"],
+      f_card_shadow:         ["style", "card_shadow"],
+      f_accent_color:        ["style", "accent_color"],
+      f_title_font_size:     ["style", "title_font_size"],
+      f_title_color:         ["style", "title_color"],
+      f_device_name_size:    ["style", "device_name_size"],
+      f_device_name_color:   ["style", "device_name_color"],
+      f_meta_color:          ["style", "meta_color"],
+      f_device_bg:           ["style", "device_bg"],
+      f_device_bg_hover:     ["style", "device_bg_hover"],
+      f_icon_online_color:   ["style", "icon_online_color"],
+      f_icon_offline_color:  ["style", "icon_offline_color"],
+      f_bar_height:          ["style", "bar_height"],
+      f_bar_cpu_color:       ["style", "bar_cpu_color"],
+      f_bar_ram_color:       ["style", "bar_ram_color"],
+      f_bar_temp_color:      ["style", "bar_temp_color"],
+    };
+  }
+
+  _sync() {
+    const c = this._config;
+    const s = c.style;
+
+    const set = (id, v) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.value = String(v ?? "");
+    };
+    const chk = (id, v) => {
+      const el = this.shadowRoot.getElementById(id);
+      if (el) el.checked = !!v;
+    };
+
+    set("f_title",              c.title || "");
+    chk("sw_auto",              c.auto_discover      !== false);
+    chk("sw_sort",              c.sort_online_first  !== false);
+    chk("sw_compact",           !!c.compact_mode);
+    chk("sw_version",           c.show_version       !== false);
+    chk("sw_temp",              c.show_temp          !== false);
+    chk("sw_uptime",            c.show_uptime        !== false);
+    chk("sw_clients",           c.show_clients       !== false);
+    set("f_card_bg",            s.card_bg);
+    set("f_card_border_radius", s.card_border_radius);
+    set("f_card_padding",       s.card_padding);
+    set("f_card_shadow",        s.card_shadow);
+    set("f_accent_color",       s.accent_color);
+    set("f_title_font_size",    s.title_font_size);
+    set("f_title_color",        s.title_color);
+    set("f_device_name_size",   s.device_name_size);
+    set("f_device_name_color",  s.device_name_color);
+    set("f_meta_color",         s.meta_color);
+    set("f_device_bg",          s.device_bg);
+    set("f_device_bg_hover",    s.device_bg_hover);
+    set("f_icon_online_color",  s.icon_online_color);
+    set("f_icon_offline_color", s.icon_offline_color);
+    set("f_bar_height",         s.bar_height);
+    set("f_bar_cpu_color",      s.bar_cpu_color);
+    set("f_bar_ram_color",      s.bar_ram_color);
+    set("f_bar_temp_color",     s.bar_temp_color);
+
+    const list = this.shadowRoot.getElementById("alias-list");
+    if (list) {
+      list.querySelectorAll("[data-alias-pfx]").forEach(el => {
+        el.value = (c.name_overrides || {})[el.dataset.aliasPfx] || "";
+      });
+    }
+  }
+
+  _onChange(ev) {
     if (!this._config) return;
-    const target = ev.target;
-    const configValue = target.configValue;
-    const value = target.tagName === 'HA-SWITCH' ? target.checked : target.value;
+    const el    = ev.target;
+    const value = el.tagName === "HA-SWITCH" ? el.checked : el.value;
+    const newCfg = _mergeConfig(this._config);
 
-    let newConfig = JSON.parse(JSON.stringify(this._config));
-
-    if (target.classList.contains('alias-input')) {
-      const prefix = target.prefix;
-      if (!newConfig.name_overrides) newConfig.name_overrides = {};
-      newConfig.name_overrides[prefix] = value;
-    } else if (configValue && configValue.includes('.')) {
-      const parts = configValue.split('.');
-      newConfig[parts[0]][parts[1]] = value;
+    if (el.dataset.aliasPfx) {
+      if (value) newCfg.name_overrides[el.dataset.aliasPfx] = value;
+      else        delete newCfg.name_overrides[el.dataset.aliasPfx];
     } else {
-      newConfig[configValue] = value;
+      const path = UnifiMonitorCardEditor._MAP[el.id];
+      if (!path) return;
+      if (path.length === 1)          newCfg[path[0]]       = value;
+      else if (path[0] === "style")   newCfg.style[path[1]] = value;
     }
 
-    this.dispatchEvent(new CustomEvent("config-changed", { detail: { config: newConfig }, bubbles: true, composed: true }));
+    this._config = newCfg;
+    this.dispatchEvent(new CustomEvent("config-changed",
+      { detail: { config: newCfg }, bubbles: true, composed: true }));
   }
 }
 
-customElements.define('unifi-monitor-card', UnifiMonitorCard);
-customElements.define('unifi-monitor-card-editor', UnifiMonitorCardEditor);
+// ================================================================
+customElements.define("unifi-monitor-card",        UnifiMonitorCard);
+customElements.define("unifi-monitor-card-editor", UnifiMonitorCardEditor);
 
 window.customCards = window.customCards || [];
 window.customCards.push({
-  type: "unifi-monitor-card",
-  name: "UniFi Monitor Pro",
-  preview: true,
-  description: "Advanced UniFi Monitoring with live styling."
+  type:        "unifi-monitor-card",
+  name:        "UniFi Monitor Card",
+  preview:     true,
+  description: `v${UMC_VERSION} · Auto-discovery · CPU · RAM · Temp · Uptime · Clients · Full visual editor`,
 });
