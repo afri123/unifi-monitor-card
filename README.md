@@ -7,8 +7,8 @@ A highly customizable, responsive, and lightweight Home Assistant Lovelace card 
 
 It automatically matches related entities (CPU, RAM, Temperature, Update, and Restart) based on a simple device prefix.
 
-*(Insert Screenshot here)*
-*(Insert Screenshot here)*
+<img width="664" height="1236" alt="unifi monitor card 1" src="https://github.com/user-attachments/assets/278b98f0-99d7-4547-9f2d-8dcad7e3c20e" />
+
 ## ✨ Features
 
 - **🪄 Zero-Config Auto-Discovery:** The card automatically scans your Home Assistant entities and builds the dashboard for all your UniFi devices without writing a single line of YAML code.
