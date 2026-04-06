@@ -102,6 +102,7 @@ style:
   font_family: "Roboto, sans-serif"
   icon_online_color: "#00E676"
   bar_cpu_color: "#29b6f6"
+````
 
 ## 🎨 Advanced Styling (card-mod)
 
